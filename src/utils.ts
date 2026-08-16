@@ -17,7 +17,6 @@ import {
 } from './sources/neoseeker';
 import {
     badPayloadError,
-    flattenToc,
     isAllowedScrapeUrl,
     notFoundError,
     SOURCE_LABEL,
@@ -215,13 +214,9 @@ export const getGuideHtml = async (
         throw new Error(badPayloadError(sourceOf(url)), { cause: e });
     }
     if (body.notFound) throw new Error(notFoundError(sourceOf(url)));
-    const toc = Array.isArray(body.toc)
-        ? (body.toc as TableOfContentEntry[])
-        : [];
     return {
         html: sanitizeGuideHtml(body.guide ?? ''),
-        // Wiki sidebars nest deeper than Steam's Dropdown can show.
-        toc: sourceOf(url) === 'neoseeker' ? flattenToc(toc) : toc,
+        toc: Array.isArray(body.toc) ? (body.toc as TableOfContentEntry[]) : [],
     };
 };
 

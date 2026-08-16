@@ -6,7 +6,6 @@ import {
 } from '../src/constants';
 import {
     badPayloadError,
-    flattenToc,
     guideListUrl,
     imageOrigins,
     isGuideSource,
@@ -144,60 +143,6 @@ describe('tocSectionFor', () => {
         ];
         expect(tocSectionFor(gfToc, GF_GUIDE, '?page=1')).toBeUndefined();
         expect(tocSectionFor(gfToc, GF_GUIDE, '')).toBeUndefined();
-    });
-});
-
-describe('flattenToc', () => {
-    it('promotes nested groups to path-labelled top-level groups, in order', () => {
-        const toc = [
-            { data: 'home', label: 'Guide Home' },
-            {
-                label: 'Items & Equipment',
-                options: [
-                    { data: 'armor', label: 'Armor' },
-                    {
-                        label: 'Weapons',
-                        options: [
-                            { data: 'weapons', label: 'Weapons' },
-                            {
-                                label: 'Daggers',
-                                options: [
-                                    { data: 'd1', label: 'Dagger' },
-                                    { data: 'd2', label: 'Parrying Dagger' },
-                                ],
-                            },
-                            { data: 'axes', label: 'Axes' },
-                        ],
-                    },
-                    { data: 'talismans', label: 'Talismans' },
-                ],
-            },
-            { label: 'Empty', options: [{ label: 'Nothing', options: [] }] },
-        ];
-        expect(flattenToc(toc)).toEqual([
-            { data: 'home', label: 'Guide Home' },
-            {
-                label: 'Items & Equipment',
-                options: [
-                    { data: 'armor', label: 'Armor' },
-                    { data: 'talismans', label: 'Talismans' },
-                ],
-            },
-            {
-                label: 'Items & Equipment › Weapons',
-                options: [
-                    { data: 'weapons', label: 'Weapons' },
-                    { data: 'axes', label: 'Axes' },
-                ],
-            },
-            {
-                label: 'Items & Equipment › Weapons › Daggers',
-                options: [
-                    { data: 'd1', label: 'Dagger' },
-                    { data: 'd2', label: 'Parrying Dagger' },
-                ],
-            },
-        ]);
     });
 });
 
