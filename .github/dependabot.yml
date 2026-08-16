@@ -1,7 +1,8 @@
-# npm: security updates only (matches the Decky plugin ecosystem — nobody runs
-# version-bump PRs). Version updates are disabled via open-pull-requests-limit: 0;
-# Dependabot security PRs still open, and get Conventional-Commit prefixes so
-# they pass commitlint. Runtime-dep fixes release a patch (fix), dev deps don't.
+# npm: one grouped, low-noise version-update PR per month for minor/patch
+# bumps (majors come as individual PRs) plus Dependabot security PRs, all with
+# Conventional-Commit prefixes so they pass commitlint. Runtime-dep bumps
+# release a patch (fix), dev deps don't. `cooldown` mirrors
+# `pnpm.minimumReleaseAge` (3 days) as a supply-chain guard.
 # github-actions: version updates ON — the workflows pin actions to commit SHAs,
 # and this is what keeps those pins moving.
 version: 2
@@ -10,11 +11,24 @@ updates:
       directory: /
       schedule:
           interval: monthly
-      open-pull-requests-limit: 0
+      open-pull-requests-limit: 3
+      cooldown:
+          default-days: 3
+      groups:
+          npm-minor-patch:
+              patterns: ['*']
+              update-types: [minor, patch]
+      ignore:
+          # v10 produces empty release notes with @semantic-release/release-notes-generator (see #4).
+          - dependency-name: conventional-changelog-conventionalcommits
+            versions: ['>=10']
+          # TS 7 (native) has no JS compiler API for @rollup/plugin-typescript.
+          - dependency-name: typescript
+            versions: ['>=7']
       commit-message:
           prefix: 'fix(deps)'
           prefix-development: 'chore(deps)'
-      labels: [dependencies, security]
+      labels: [dependencies]
 
     - package-ecosystem: github-actions
       directory: /
