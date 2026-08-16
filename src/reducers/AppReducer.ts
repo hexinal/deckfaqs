@@ -37,17 +37,17 @@ export type AppActions =
     | UpdateErrorAction;
 
 /** A user-facing fetch error; cleared by the next navigation/result. */
-export type UpdateErrorAction = {
+type UpdateErrorAction = {
     type: typeof ActionType.UPDATE_ERROR;
     payload: string;
 };
 
-export type UpdateSearchAction = {
+type UpdateSearchAction = {
     type: typeof ActionType.UPDATE_SEARCH;
     payload: GuideSearch;
 };
 
-export type UpdateLoadingAction = {
+type UpdateLoadingAction = {
     type: typeof ActionType.UPDATE_LOADING;
     payload: boolean;
 };
@@ -57,45 +57,45 @@ type UpdatePluginState = {
     isLoading: boolean;
 };
 
-export type UpdatePluginStateAction = {
+type UpdatePluginStateAction = {
     type: typeof ActionType.UPDATE_PLUGIN_STATE;
     payload: UpdatePluginState;
 };
 
-export type UpdateResultsAction = {
+type UpdateResultsAction = {
     type: typeof ActionType.UPDATE_RESULTS;
     payload: ListItem[];
 };
 
-export type UpdateGamesAction = {
+type UpdateGamesAction = {
     type: typeof ActionType.UPDATE_GAMES;
     payload: { games: ListItem[]; runningGame?: string };
 };
 
-export type UpdateGuidesAction = {
+type UpdateGuidesAction = {
     type: typeof ActionType.UPDATE_GUIDES;
     payload: ListItem[];
 };
 
-export type UpdateRunningGameAction = {
+type UpdateRunningGameAction = {
     type: typeof ActionType.UPDATE_RUNNING_GAME;
     payload?: string;
 };
 
-export type UpdateGuideAction = {
+type UpdateGuideAction = {
     type: typeof ActionType.UPDATE_GUIDE;
     payload: GuideContents;
 };
 
-export type BackAction = {
+type BackAction = {
     type: typeof ActionType.BACK;
 };
 
-export type BackToStateAction = {
+type BackToStateAction = {
     type: typeof ActionType.BACK_TO_STATE;
     payload: PluginState;
 };
-export type UpdateDarkModeAction = {
+type UpdateDarkModeAction = {
     type: typeof ActionType.UPDATE_DARK_MODE;
     payload: boolean;
 };

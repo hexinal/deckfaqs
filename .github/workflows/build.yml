@@ -85,6 +85,9 @@ jobs:
             - name: Test
               run: pnpm run test
 
+            - name: Unused code / dependencies
+              run: pnpm run knip
+
             - name: Build
               run: pnpm run build
 

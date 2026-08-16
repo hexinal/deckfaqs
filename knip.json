@@ -1,0 +1,9 @@
+{
+    "$schema": "https://unpkg.com/knip@6/schema.json",
+    "entry": ["src/index.tsx"],
+    "project": ["src/**/*.{ts,tsx}", "test/**/*.ts"],
+    "ignoreDependencies": [
+        "@semantic-release/npm",
+        "conventional-changelog-conventionalcommits"
+    ]
+}

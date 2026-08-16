@@ -61,7 +61,7 @@ const BLANK_PAGE = 'data:text/html,<body><%2Fbody>';
 
 export const ERROR_NO_BROWSER_VIEW =
     "Steam's browser view is unavailable. Restart Steam and try again.";
-export const ERROR_UNREACHABLE =
+const ERROR_UNREACHABLE =
     "Couldn't load GameFAQs. Check the connection and retry.";
 export const ERROR_BAD_PAYLOAD =
     'GameFAQs returned something unexpected. Retry, or update DeckFAQs if it keeps happening.';
@@ -307,7 +307,7 @@ export const getGuidesCode = `function get_guides() {
 }
 get_guides()`;
 
-export type GuideEntry = {
+type GuideEntry = {
     href: string;
     title: string;
     version: string;

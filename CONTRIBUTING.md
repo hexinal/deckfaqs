@@ -15,6 +15,7 @@ pnpm build            # bundle src/index.tsx -> dist/index.js
 pnpm typecheck        # tsc --noEmit
 pnpm lint             # eslint .            (lint:fix to auto-fix)
 pnpm test             # vitest run           (test:watch for watch mode)
+pnpm knip             # unused files/exports/dependencies (knip.json)
 pnpm format           # prettier --write .   (format:check in CI)
 pnpm package          # build output -> deckfaqs.zip / deckfaqs.tar.gz (or: task package)
 ```
@@ -44,7 +45,7 @@ Dependency updates: for npm, Dependabot only opens **security** PRs here (`.gith
 
 ## Pull requests
 
-- Branch off `main`, open a PR against `main`. CI runs format check, ESLint, type-check, tests, build and packaging; the built zip is available as a workflow artifact. Merging requires those checks to be green.
+- Branch off `main`, open a PR against `main`. CI runs format check, ESLint, type-check, tests, knip, build and packaging; the built zip is available as a workflow artifact. Merging requires those checks to be green.
 - ESLint (`eslint.config.js`: `@eslint/js` + `typescript-eslint` recommended-type-checked + `react-hooks`, prettier-compatible) must pass with zero warnings (`pnpm lint`); type-only imports must use `import type` (`verbatimModuleSyntax`), promises must be awaited or explicitly `void`ed. Props/APIs the Steam client has but `@decky/ui` doesn't declare go into `src/decky-ui.d.ts` instead of `@ts-ignore`.
 - Keep the code style: 4-space indent, single quotes, es5 trailing commas (`.prettierrc.json`, `.editorconfig`); CSS modules don't work under Decky's router, so styling is inline.
 - When GameFAQs markup changes, the in-tab extraction scripts in `src/utils.ts` (`getGuideCode`, `getGuidesCode`, `getGamesCode`) and their parsers (`parseGuideList`, `parseSearchResults`) are the usual suspects — update the fixture in `test/fixtures/` (save the page from a browser, strip `<script>` tags) so `test/extractors.test.ts` covers the new markup.
