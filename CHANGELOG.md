@@ -1,3 +1,9 @@
+## [2.0.4](https://github.com/hexinal/deckfaqs/compare/v2.0.3...v2.0.4) (2026-08-16)
+
+### Bug Fixes
+
+* restrict BrowserView to GameFAQs, encode search term and guide anchors ([53a8dd8](https://github.com/hexinal/deckfaqs/commit/53a8dd83df3e5996c630a4999e41bf986bb2cf27))
+
 ## [2.0.3](https://github.com/hexinal/deckfaqs/compare/v2.0.2...v2.0.3) (2026-08-16)
 
 
