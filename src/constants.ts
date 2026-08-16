@@ -1,5 +1,5 @@
 const faqsNightmareRegex =
-    /(\/faqs\/\d+)\">(.*?)<\/a>[\S\n\t ]*?(rec)?\">\n.*(v\.[^,]*).*title=\"(.*)\"/gm;
+    /(\/faqs\/\d+)">(.*?)<\/a>[\S\n\t ]*?(rec)?">\n.*(v\.[^,]*).*title="(.*)"/gm;
 
 const ignoreSteam = [1887720, 1070560, 1391110, 228980];
 const ignoreNonSteam = [

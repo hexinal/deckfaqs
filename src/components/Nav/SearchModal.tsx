@@ -16,8 +16,8 @@ export const SearchModal = ({
         setSearchText(e.target.value);
     };
     const handleSubmit = () => {
-        setModalResult && setModalResult(searchText);
-        closeModal && closeModal();
+        setModalResult?.(searchText);
+        closeModal?.();
     };
     const textField = useRef<any>(null);
 

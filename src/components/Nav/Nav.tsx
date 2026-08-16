@@ -59,7 +59,7 @@ export const Nav = () => {
 
     const handleSearch = (result: string) => {
         result = result.trim();
-        result && gameSearch(result, browserView, dispatch);
+        if (result) gameSearch(result, browserView, dispatch);
         Navigation.OpenQuickAccessMenu(QuickAccessTab.Decky);
     };
 

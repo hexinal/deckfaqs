@@ -3,6 +3,7 @@ import DOMPurify from 'dompurify';
 import type { Dispatch } from 'react';
 import { SearchResult } from './components/List/GameList';
 import { ListItem } from './components/List/List';
+import type { TableOfContentEntry } from './context/AppContext';
 import { ActionType, AppActions } from './reducers/AppReducer';
 
 const getGuideCode = `function parseList(list) {
@@ -111,7 +112,7 @@ export const getContent = async (
     url: string,
     browserView: any,
     code: string,
-    handleResult: Function
+    handleResult: (result: string) => void
 ) => {
     const htmlResult = await scrapeUrl(url, browserView, code);
     handleResult(htmlResult);
@@ -120,10 +121,10 @@ export const getContent = async (
 export const getGuideHtml = async (
     url: string,
     browserView: any,
-    handleResult: Function
+    handleResult: (result: string, toc: TableOfContentEntry[]) => void
 ) => {
     let htmlResult = '';
-    let toc = '';
+    let toc: TableOfContentEntry[] = [];
     const raw = await scrapeUrl(url, browserView, getGuideCode);
     if (raw) {
         try {
@@ -166,7 +167,7 @@ export const gameSearch = async (
         }
     get_games()`,
         (result: string) => {
-            let searchResults: ListItem[] = [];
+            const searchResults: ListItem[] = [];
             let results: SearchResult[] = [];
             try {
                 if (result) results = JSON.parse(result);

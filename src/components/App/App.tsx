@@ -47,7 +47,8 @@ export const App = () => {
         let newRunningGame: string | undefined = undefined;
         const appId = parseInt(strAppId);
         if (actionName == 'LaunchApp') {
-            let gameInfo: AppOverview = appStore.GetAppOverviewByGameID(appId);
+            const gameInfo: AppOverview =
+                appStore.GetAppOverviewByGameID(appId);
             if (
                 gameInfo &&
                 !ignoreSteam.includes(appId) &&
