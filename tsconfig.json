@@ -22,6 +22,6 @@
         "noUncheckedIndexedAccess": true,
         "noFallthroughCasesInSwitch": true
     },
-    "include": ["src", "test", "vitest.config.ts"],
+    "include": ["src", "test", "vitest.config.ts", "vitest.smoke.config.ts"],
     "exclude": ["node_modules"]
 }

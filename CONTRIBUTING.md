@@ -15,12 +15,13 @@ pnpm build            # bundle src/index.tsx -> dist/index.js
 pnpm typecheck        # tsc --noEmit
 pnpm lint             # eslint .            (lint:fix to auto-fix)
 pnpm test             # vitest run           (test:watch for watch mode)
+pnpm test:smoke       # end-to-end run of the built dist/index.js in jsdom (after pnpm build)
 pnpm knip             # unused files/exports/dependencies (knip.json)
 pnpm format           # prettier --write .   (format:check in CI)
 pnpm package          # build output -> deckfaqs.zip / deckfaqs.tar.gz (or: task package)
 ```
 
-There is no Python backend. Unit tests (vitest + jsdom, `test/`) cover the reducer, URL/payload helpers, the request queue and the in-tab extraction scripts against saved GameFAQs pages in `test/fixtures/`; UI behaviour is still verified on a Steam Deck.
+There is no Python backend. Unit tests (vitest + jsdom, `test/*.test.ts`) cover the reducer, URL/payload helpers, the request queue and the in-tab extraction scripts against saved GameFAQs pages in `test/fixtures/`. `pnpm test:smoke` (`test/smoke/`) goes further: it loads the **built** `dist/index.js` in jsdom with fake `SP_REACT`/`DFL`/`SteamClient`/Decky-loader globals (`test/smoke/env.ts`) and drives the real UI through games → search → guide list → guide (incl. TOC, fullscreen search, error/retry), with the plugin's own extraction scripts running against the saved pages. CI runs both, so a dependency bump that breaks the plugin at runtime fails CI; only Steam-specific look & feel still needs a check on the Deck.
 
 ## Testing on a Steam Deck
 
@@ -45,7 +46,7 @@ Dependency updates: Dependabot opens security PRs plus one grouped minor/patch n
 
 ## Pull requests
 
-- Branch off `main`, open a PR against `main`. CI runs format check, ESLint, type-check, tests, knip, build and packaging; the built zip is available as a workflow artifact. Merging requires those checks to be green.
+- Branch off `main`, open a PR against `main`. CI runs format check, ESLint, type-check, unit tests, knip, build, the bundle smoke test and packaging; the built zip is available as a workflow artifact. Merging requires those checks to be green.
 - ESLint (`eslint.config.js`: `@eslint/js` + `typescript-eslint` recommended-type-checked + `react-hooks`, prettier-compatible) must pass with zero warnings (`pnpm lint`); type-only imports must use `import type` (`verbatimModuleSyntax`), promises must be awaited or explicitly `void`ed. Props/APIs the Steam client has but `@decky/ui` doesn't declare go into `src/decky-ui.d.ts` instead of `@ts-ignore`.
 - Keep the code style: 4-space indent, single quotes, es5 trailing commas (`.prettierrc.json`, `.editorconfig`); CSS modules don't work under Decky's router, so styling is inline.
 - When GameFAQs markup changes, the in-tab extraction scripts in `src/utils.ts` (`getGuideCode`, `getGuidesCode`, `getGamesCode`) and their parsers (`parseGuideList`, `parseSearchResults`) are the usual suspects — update the fixture in `test/fixtures/` (save the page from a browser, strip `<script>` tags) so `test/extractors.test.ts` covers the new markup.
