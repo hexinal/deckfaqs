@@ -39,6 +39,12 @@ tasks:
         cmds:
             - pnpm run test
 
+    test-smoke:
+        desc: Run the built bundle end-to-end in jsdom (needs a build)
+        deps: [build]
+        cmds:
+            - pnpm run test:smoke
+
     format:
         desc: Format the repo with prettier
         cmds:

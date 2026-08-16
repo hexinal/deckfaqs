@@ -82,7 +82,7 @@ jobs:
             - name: Type-check
               run: pnpm run typecheck
 
-            - name: Test
+            - name: Unit tests
               run: pnpm run test
 
             - name: Unused code / dependencies
@@ -90,6 +90,12 @@ jobs:
 
             - name: Build
               run: pnpm run build
+
+            # Runs the built dist/index.js in jsdom with fake Steam/Decky globals
+            # and drives games -> search -> guides -> guide against saved GameFAQs
+            # pages, so a dependency bump that breaks the plugin at runtime fails here.
+            - name: Smoke test built bundle
+              run: pnpm run test:smoke
 
             # Produces deckfaqs.zip / deckfaqs.tar.gz in the Decky plugin layout
             # (package.json with "type": "module" next to plugin.json, bundle in dist/).
