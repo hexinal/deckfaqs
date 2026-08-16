@@ -279,6 +279,66 @@ export const parseSearchResults = (raw: string): ListItem[] => {
     );
 };
 
+// Runs in the game's /faqs page. Returns undefined while the guide lists have
+// not rendered yet (keeps polling), '[]' for games without guides, else a JSON
+// array of {href, title, version, date} for every guide entry.
+export const getGuidesCode = `function get_guides() {
+    const lists = document.querySelectorAll('ol.guides');
+    if (lists.length === 0) {
+        const text = document.body?.textContent ?? '';
+        return text.includes('Want to Write Your Own Guide?') ? '[]' : undefined;
+    }
+    const out = [];
+    for (const li of document.querySelectorAll('ol.guides li')) {
+        const a = li.querySelector('a[href*="/faqs/"]');
+        if (!a) continue;
+        const href = a.getAttribute('href') || '';
+        if (!/\\/faqs\\/\\d+/.test(href)) continue;
+        const meta = li.querySelector('.meta.float_r');
+        const metaText = meta ? (meta.textContent || '').trim() : '';
+        const version = metaText.startsWith('v.') ? metaText.split(',')[0].trim() : '';
+        const dateEl = li.querySelector('.guide_date');
+        const date = dateEl
+            ? dateEl.getAttribute('title') || (dateEl.textContent || '').trim()
+            : '';
+        out.push({ href, title: (a.textContent || '').trim(), version, date });
+    }
+    return JSON.stringify(out);
+}
+get_guides()`;
+
+export type GuideEntry = {
+    href: string;
+    title: string;
+    version: string;
+    date: string;
+};
+
+/** Turns the JSON emitted by getGuidesCode into list items. */
+export const parseGuideList = (raw: string): ListItem[] => {
+    let entries: unknown;
+    try {
+        entries = raw ? JSON.parse(raw) : [];
+    } catch (e) {
+        console.error('[DeckFAQs] unexpected guide list payload', e);
+        throw new Error(ERROR_BAD_PAYLOAD, { cause: e });
+    }
+    if (!Array.isArray(entries)) return [];
+    return (entries as Partial<GuideEntry>[]).flatMap((entry) => {
+        if (!entry?.href || !entry.title) return [];
+        let url: string;
+        try {
+            url = new URL(entry.href, GAMEFAQS_ORIGIN).href;
+        } catch {
+            return [];
+        }
+        const text = [entry.title, entry.version, entry.date]
+            .filter(Boolean)
+            .join(' - ');
+        return [{ text, url }];
+    });
+};
+
 export const gameSearch = (
     game: string,
     browserView: BrowserView | undefined,
