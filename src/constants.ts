@@ -4,6 +4,9 @@ const faqsNightmareRegex =
 // The only origin the hidden BrowserView is allowed to load (see utils.ts scrapeUrl).
 const GAMEFAQS_ORIGIN = 'https://gamefaqs.gamespot.com';
 
+// SteamClient.Storage key for persisted settings ({ darkMode }).
+const SETTINGS = 'deckfaqs_settings';
+
 const ignoreSteam = [1887720, 1070560, 1391110, 228980];
 const ignoreNonSteam = [
     'EmulationStation-DE-x64_SteamDeck',
@@ -29,4 +32,10 @@ const ignoreNonSteam = [
     'MAME',
 ];
 
-export { GAMEFAQS_ORIGIN, ignoreSteam, ignoreNonSteam, faqsNightmareRegex };
+export {
+    GAMEFAQS_ORIGIN,
+    SETTINGS,
+    ignoreSteam,
+    ignoreNonSteam,
+    faqsNightmareRegex,
+};

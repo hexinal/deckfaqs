@@ -3,30 +3,22 @@ import { ListItem } from '../List/List';
 import { Router } from '@decky/ui';
 import { AppContext } from '../../context/AppContext';
 import { ActionType } from '../../reducers/AppReducer';
-import { ignoreNonSteam, ignoreSteam } from '../../constants';
+import { SETTINGS, ignoreNonSteam, ignoreSteam } from '../../constants';
 import { Nav } from '../Nav/Nav';
 import { MainView } from './MainView';
 
 // This used to use css modules, but with the way the new React Based router works,
 // I have yet to figure out how to import css properly
 
-const SETTINGS = 'deckfaqs_settings';
-
 export const App = () => {
     const {
-        state: { pluginState, darkMode },
+        state: { pluginState },
         dispatch,
     } = useContext(AppContext);
     const mainDiv = useRef<HTMLDivElement>(null);
     useEffect(() => {
         mainDiv.current?.scrollTo({ top: 0 });
     }, [pluginState]);
-
-    useEffect(() => {
-        return function cleanup() {
-            SteamClient.Storage.SetObject(SETTINGS, { darkMode });
-        };
-    }, [darkMode]);
 
     useEffect(() => {
         dispatch({
@@ -114,7 +106,7 @@ export const App = () => {
                     .map(({ appName }): ListItem => {
                         return { text: appName };
                     }),
-                runningGame: currentRunningGame,
+                runningGame,
             };
         };
 
