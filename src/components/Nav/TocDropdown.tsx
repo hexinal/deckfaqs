@@ -2,7 +2,7 @@ import { Dropdown, type SingleDropdownOption } from '@decky/ui';
 import { useContext, type CSSProperties } from 'react';
 import { AppContext } from '../../context/AppContext';
 import { ActionType } from '../../reducers/AppReducer';
-import { getGuideHtml } from '../../utils';
+import { getGuideHtml, request } from '../../utils';
 
 type TocDropdownProps = {
     style?: CSSProperties;
@@ -25,21 +25,30 @@ export const TocDropdown = ({ style }: TocDropdownProps) => {
                 payload: { ...currentGuide, anchor, currentTocSection: path },
             });
         } else {
-            dispatch({ type: ActionType.UPDATE_LOADING, payload: true });
-            getGuideHtml(href, browserView, (result: string) => {
-                if (path.indexOf('#') > 0) {
-                    anchor = path.substring(path.indexOf('#') + 1);
+            request(
+                { browserView, dispatch },
+                (ctx) => {
+                    dispatch({
+                        type: ActionType.UPDATE_LOADING,
+                        payload: true,
+                    });
+                    return getGuideHtml(href, ctx);
+                },
+                ({ html }) => {
+                    if (path.indexOf('#') > 0) {
+                        anchor = path.substring(path.indexOf('#') + 1);
+                    }
+                    dispatch({
+                        type: ActionType.UPDATE_GUIDE,
+                        payload: {
+                            ...currentGuide,
+                            guideHtml: html,
+                            anchor,
+                            currentTocSection: path,
+                        },
+                    });
                 }
-                dispatch({
-                    type: ActionType.UPDATE_GUIDE,
-                    payload: {
-                        ...currentGuide,
-                        guideHtml: result,
-                        anchor,
-                        currentTocSection: path,
-                    },
-                });
-            });
+            );
         }
     };
     return (

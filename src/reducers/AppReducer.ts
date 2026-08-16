@@ -18,6 +18,7 @@ export enum ActionType {
     UPDATE_DARK_MODE,
     UPDATE_LOADING,
     UPDATE_SEARCH,
+    UPDATE_ERROR,
 }
 
 export type AppActions =
@@ -31,7 +32,14 @@ export type AppActions =
     | BackToStateAction
     | UpdateDarkModeAction
     | UpdateLoadingAction
-    | UpdateSearchAction;
+    | UpdateSearchAction
+    | UpdateErrorAction;
+
+/** A user-facing fetch error; cleared by the next navigation/result. */
+export type UpdateErrorAction = {
+    type: ActionType.UPDATE_ERROR;
+    payload: string;
+};
 
 export type UpdateSearchAction = {
     type: ActionType.UPDATE_SEARCH;
@@ -97,10 +105,12 @@ export const appReducer = (state: TAppState, action: AppActions): TAppState => {
             return {
                 ...state,
                 ...action.payload,
+                error: undefined,
             };
         case ActionType.UPDATE_GAMES:
             return {
                 ...state,
+                error: undefined,
                 games: action.payload.games,
                 runningGame: action.payload.runningGame,
                 pluginState: 'games',
@@ -109,6 +119,7 @@ export const appReducer = (state: TAppState, action: AppActions): TAppState => {
         case ActionType.UPDATE_RESULTS:
             return {
                 ...state,
+                error: undefined,
                 isLoading: false,
                 searchResults: action.payload,
                 pluginState: 'results',
@@ -116,6 +127,7 @@ export const appReducer = (state: TAppState, action: AppActions): TAppState => {
         case ActionType.UPDATE_GUIDES:
             return {
                 ...state,
+                error: undefined,
                 isLoading: false,
                 guides: action.payload,
                 pluginState: 'guides',
@@ -128,6 +140,7 @@ export const appReducer = (state: TAppState, action: AppActions): TAppState => {
         case ActionType.UPDATE_GUIDE:
             return {
                 ...state,
+                error: undefined,
                 isLoading: false,
                 currentGuide: action.payload,
                 search: {
@@ -155,6 +168,7 @@ export const appReducer = (state: TAppState, action: AppActions): TAppState => {
                 pluginState: newPluginState,
                 currentGuide: undefined,
                 isLoading: false,
+                error: undefined,
             };
         }
         case ActionType.BACK_TO_STATE:
@@ -162,6 +176,7 @@ export const appReducer = (state: TAppState, action: AppActions): TAppState => {
                 ...state,
                 pluginState: action.payload,
                 isLoading: false,
+                error: undefined,
             };
         case ActionType.UPDATE_DARK_MODE:
             return {
@@ -172,6 +187,13 @@ export const appReducer = (state: TAppState, action: AppActions): TAppState => {
             return {
                 ...state,
                 isLoading: action.payload,
+                error: action.payload ? undefined : state.error,
+            };
+        case ActionType.UPDATE_ERROR:
+            return {
+                ...state,
+                isLoading: false,
+                error: action.payload,
             };
         case ActionType.UPDATE_SEARCH:
             return {

@@ -2,7 +2,7 @@ import { useCallback, useContext, useMemo } from 'react';
 import { faqsNightmareRegex } from '../../constants';
 import { AppContext } from '../../context/AppContext';
 import { ActionType } from '../../reducers/AppReducer';
-import { getContent } from '../../utils';
+import { getContent, request } from '../../utils';
 import { List, ListItem } from './List';
 
 export const ResultList = () => {
@@ -13,17 +13,19 @@ export const ResultList = () => {
     } = useContext(AppContext);
 
     const getGuides = useCallback(
-        async (url: string) => {
-            let guides: ListItem[] = [];
+        (url: string) => {
             const faqUrl = `${url}/faqs`;
-            dispatch({
-                type: ActionType.UPDATE_PLUGIN_STATE,
-                payload: { pluginState: 'guides', isLoading: true },
-            });
-            getContent(
-                faqUrl,
-                browserView,
-                `function get_guides() {
+            request(
+                { browserView, dispatch },
+                (ctx) => {
+                    dispatch({
+                        type: ActionType.UPDATE_PLUGIN_STATE,
+                        payload: { pluginState: 'guides', isLoading: true },
+                    });
+                    return getContent(
+                        faqUrl,
+                        ctx,
+                        `function get_guides() {
                 let content = document.getElementsByClassName("guides")
                 if(content.length > 0)
                     return document.documentElement.outerHTML;
@@ -34,10 +36,11 @@ export const ResultList = () => {
                 }
                 return undefined
             }
-            get_guides()`,
-                (result: string) => {
-                    const body = result;
-                    guides = [];
+            get_guides()`
+                    );
+                },
+                (body: string) => {
+                    const guides: ListItem[] = [];
                     if (body) {
                         const faqs = Array.from(
                             body.matchAll?.(faqsNightmareRegex) ?? []
