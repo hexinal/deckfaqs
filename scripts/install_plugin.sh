@@ -8,16 +8,21 @@ VERSION="${1:-latest}"
 PLUGINS_DIR="/home/deck/homebrew/plugins"
 
 if [ "$VERSION" = "latest" ]; then
-    URL="https://github.com/$REPO/releases/latest/download/deckfaqs.zip"
+    BASE="https://github.com/$REPO/releases/latest/download"
 else
-    URL="https://github.com/$REPO/releases/download/$VERSION/deckfaqs.zip"
+    BASE="https://github.com/$REPO/releases/download/$VERSION"
 fi
+URL="$BASE/deckfaqs.zip"
 
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
 echo "Downloading DeckFAQs ($VERSION) from $URL"
 curl -fL -o "$TMP/deckfaqs.zip" "$URL"
+curl -fL -o "$TMP/SHA256SUMS" "$BASE/SHA256SUMS"
+
+echo "Verifying checksum"
+(cd "$TMP" && grep ' deckfaqs.zip$' SHA256SUMS | sha256sum -c -)
 
 echo "Installing to $PLUGINS_DIR/deckfaqs"
 sudo rm -rf "$PLUGINS_DIR/deckfaqs"
