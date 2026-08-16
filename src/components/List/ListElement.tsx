@@ -14,7 +14,7 @@ export const ListElement = ({
 }: ListElementProps) => {
     const handleClick = useCallback(() => {
         onClick(value);
-    }, [value]);
+    }, [onClick, value]);
 
     return (
         <PanelSectionRow>

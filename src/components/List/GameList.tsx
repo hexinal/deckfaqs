@@ -1,5 +1,5 @@
 import { ButtonItem, PanelSection, PanelSectionRow } from '@decky/ui';
-import { useContext, useMemo } from 'react';
+import { useCallback, useContext, useMemo } from 'react';
 import { AppContext } from '../../context/AppContext';
 import { gameSearch } from '../../utils';
 import { List } from './List';
@@ -12,9 +12,12 @@ export type SearchResult = {
 export const GameList = () => {
     const { state, dispatch, browserView } = useContext(AppContext);
 
-    const search = (game: string) => {
-        gameSearch(game, browserView, dispatch);
-    };
+    const search = useCallback(
+        (game: string) => {
+            gameSearch(game, browserView, dispatch);
+        },
+        [browserView, dispatch]
+    );
 
     const { runningGame, games } = state;
     return useMemo(
@@ -39,6 +42,6 @@ export const GameList = () => {
                 ></List>
             </>
         ),
-        [runningGame, games]
+        [runningGame, games, search]
     );
 };
