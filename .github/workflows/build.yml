@@ -55,8 +55,6 @@ jobs:
         concurrency: release
         permissions:
             contents: write # tags, release commit, GitHub release + assets
-            issues: write # comment on released issues
-            pull-requests: write # comment on released PRs
         steps:
             - uses: actions/checkout@v4
               with:
