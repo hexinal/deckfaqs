@@ -195,21 +195,22 @@ describe('getGuideHtml', () => {
         ).rejects.toThrow(ERROR_NO_BROWSER_VIEW);
     });
     it('refuses off-origin URLs', async () => {
-        const browserView = { LoadURL: vi.fn() } as unknown as BrowserView;
+        const loadUrl = vi.fn();
+        const browserView = { LoadURL: loadUrl } as unknown as BrowserView;
         await expect(
             getGuideHtml('https://example.com/', {
                 browserView,
                 cancelled: () => false,
             })
         ).rejects.toThrow(/off-origin/);
-        expect(browserView.LoadURL).not.toHaveBeenCalled();
+        expect(loadUrl).not.toHaveBeenCalled();
     });
     it('sanitises the guide and passes the TOC through', async () => {
         const { fetchNoCors, executeInTab } = await import('@decky/api');
         const url = 'https://gamefaqs.gamespot.com/ps2/1-x/faqs/1';
         vi.mocked(fetchNoCors).mockResolvedValue({
             ok: true,
-            json: async () => [{ url, title: 'Guide' }],
+            json: () => Promise.resolve([{ url, title: 'Guide' }]),
         } as Response);
         vi.mocked(executeInTab).mockResolvedValue({
             success: true,
@@ -218,7 +219,8 @@ describe('getGuideHtml', () => {
                 toc: [{ data: '#s1', label: 'Intro' }],
             }),
         });
-        const browserView = { LoadURL: vi.fn() } as unknown as BrowserView;
+        const loadUrl = vi.fn();
+        const browserView = { LoadURL: loadUrl } as unknown as BrowserView;
         const page = await getGuideHtml(url, {
             browserView,
             cancelled: () => false,
@@ -226,8 +228,7 @@ describe('getGuideHtml', () => {
         expect(page.html).toBe('<div id="faqwrap"><p>hi</p></div>');
         expect(page.toc).toEqual([{ data: '#s1', label: 'Intro' }]);
         // Loaded the guide, then parked the view on a blank page.
-        const loadUrl = vi.mocked(browserView.LoadURL);
-        expect(loadUrl.mock.calls[0][0]).toBe(url);
+        expect(loadUrl.mock.calls[0]?.[0]).toBe(url);
         expect(loadUrl).toHaveBeenCalledTimes(2);
     });
 });

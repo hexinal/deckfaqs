@@ -78,7 +78,7 @@ export const Nav = () => {
         (result: boolean) => {
             dispatch({ type: ActionType.UPDATE_DARK_MODE, payload: result });
             // Persist on change; the QAM panel is alwaysRender so it rarely unmounts.
-            SteamClient.Storage.SetObject(SETTINGS, { darkMode: result });
+            void SteamClient.Storage.SetObject(SETTINGS, { darkMode: result });
         },
         [dispatch]
     );

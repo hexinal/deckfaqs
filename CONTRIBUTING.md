@@ -2,11 +2,11 @@
 
 ## Development setup
 
-Requirements: Node 22 (see `.nvmrc`), [pnpm](https://pnpm.io) (version pinned via `packageManager` in `package.json`), optionally [go-task](https://taskfile.dev). Easiest setup with [fnm](https://github.com/Schniz/fnm) — it switches Node automatically from `.nvmrc`, and Corepack provides the pinned pnpm:
+Requirements: Node 24 LTS (see `.nvmrc`; anything ≥ 22.13 works), [pnpm](https://pnpm.io) (version pinned via `packageManager` in `package.json`), optionally [go-task](https://taskfile.dev). Easiest setup with [fnm](https://github.com/Schniz/fnm) — it switches Node automatically from `.nvmrc`, and Corepack provides the pinned pnpm (Node ≥ 25 no longer bundles Corepack: `npm i -g corepack` first, or install pnpm any other way and it will honour `packageManager` itself):
 
 ```sh
 curl -fsSL https://fnm.vercel.app/install | bash   # then restart your shell
-fnm install 22 && corepack enable pnpm
+fnm install 24 && corepack enable pnpm
 ```
 
 ```sh
@@ -45,6 +45,6 @@ Dependency updates: for npm, Dependabot only opens **security** PRs here (`.gith
 ## Pull requests
 
 - Branch off `main`, open a PR against `main`. CI runs format check, ESLint, type-check, tests, build and packaging; the built zip is available as a workflow artifact. Merging requires those checks to be green.
-- ESLint (`eslint.config.js`: `@eslint/js` + `typescript-eslint` recommended + `react-hooks`, prettier-compatible) must pass with zero warnings (`pnpm lint`). Props/APIs the Steam client has but `@decky/ui` doesn't declare go into `src/decky-ui.d.ts` instead of `@ts-ignore`.
+- ESLint (`eslint.config.js`: `@eslint/js` + `typescript-eslint` recommended-type-checked + `react-hooks`, prettier-compatible) must pass with zero warnings (`pnpm lint`); type-only imports must use `import type` (`verbatimModuleSyntax`), promises must be awaited or explicitly `void`ed. Props/APIs the Steam client has but `@decky/ui` doesn't declare go into `src/decky-ui.d.ts` instead of `@ts-ignore`.
 - Keep the code style: 4-space indent, single quotes, es5 trailing commas (`.prettierrc.json`, `.editorconfig`); CSS modules don't work under Decky's router, so styling is inline.
 - When GameFAQs markup changes, the in-tab extraction scripts in `src/utils.ts` (`getGuideCode`, `getGuidesCode`, `getGamesCode`) and their parsers (`parseGuideList`, `parseSearchResults`) are the usual suspects — update the fixture in `test/fixtures/` (save the page from a browser, strip `<script>` tags) so `test/extractors.test.ts` covers the new markup.

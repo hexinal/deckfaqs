@@ -10,10 +10,10 @@ import { useCallback, useContext, useEffect, useMemo, useRef } from 'react';
 import {
     AppContext,
     AppContextProvider,
-    GuideContents,
+    type GuideContents,
 } from '../../context/AppContext';
 import parse, {
-    HTMLReactParserOptions,
+    type HTMLReactParserOptions,
     Element,
     domToReact,
     type DOMNode,
@@ -241,7 +241,7 @@ export const Guide = ({ fullscreen }: GuideProps) => {
             search.anchorIndex >= 0 &&
             elements.length > search.anchorIndex
         ) {
-            elements[search.anchorIndex].scrollIntoView();
+            elements[search.anchorIndex]?.scrollIntoView();
         }
     }, [search.anchorIndex]);
 

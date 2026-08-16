@@ -1,5 +1,5 @@
 import { ScrollPanel as DeckyScrollPanel } from '@decky/ui';
-import { FC, ReactNode, HTMLAttributes, RefAttributes } from 'react';
+import type { FC, ReactNode, HTMLAttributes, RefAttributes } from 'react';
 
 //Unclear how many of these have an effect (also probably not exhaustive)
 interface ScrollPanelProps extends HTMLAttributes<HTMLDivElement> {

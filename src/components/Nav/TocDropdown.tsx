@@ -15,7 +15,7 @@ export const TocDropdown = ({ style }: TocDropdownProps) => {
         browserView,
     } = useContext(AppContext);
     const handleTOCChange = (data: SingleDropdownOption) => {
-        const path: string = data.data;
+        const path = data.data as string;
         let anchor: string | undefined = undefined;
         const href = `${currentGuide?.guideUrl}/${path}`;
         if (path.startsWith('#')) {
