@@ -40,7 +40,7 @@ export const List = ({ data, header, handleClick }: ListProps) => {
             <div>
                 {data?.map(({ text, url }) => (
                     <ListElement
-                        key={text}
+                        key={url ?? text}
                         displayText={text}
                         value={url ?? text}
                         onClick={handleClick}
