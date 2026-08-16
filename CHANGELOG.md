@@ -1,3 +1,9 @@
+## [2.0.7](https://github.com/hexinal/deckfaqs/compare/v2.0.6...v2.0.7) (2026-08-16)
+
+### Refactoring
+
+* extract the guide list in-tab with DOM queries instead of a regex ([#8](https://github.com/hexinal/deckfaqs/issues/8)) ([0a4c626](https://github.com/hexinal/deckfaqs/commit/0a4c626e14fa66b3e29f8d4ace0fe00d2bc35e48))
+
 ## [2.0.6](https://github.com/hexinal/deckfaqs/compare/v2.0.5...v2.0.6) (2026-08-16)
 
 ### Bug Fixes
