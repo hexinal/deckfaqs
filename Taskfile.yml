@@ -29,6 +29,11 @@ tasks:
         cmds:
             - pnpm run typecheck
 
+    lint:
+        desc: Run ESLint
+        cmds:
+            - pnpm run lint
+
     format:
         desc: Format the repo with prettier
         cmds:
