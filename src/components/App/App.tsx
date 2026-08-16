@@ -4,6 +4,7 @@ import { Router } from '@decky/ui';
 import { AppContext } from '../../context/AppContext';
 import { ActionType } from '../../reducers/AppReducer';
 import { SETTINGS, ignoreNonSteam, ignoreSteam } from '../../constants';
+import { loadPositions } from '../../positions';
 import { Nav } from '../Nav/Nav';
 import { MainView } from './MainView';
 
@@ -124,6 +125,9 @@ export const App = () => {
                     payload: { games: [] },
                 });
             });
+
+        // Warm the reading-position cache so opening a guide doesn't wait on it.
+        void loadPositions();
 
         SteamClient.Storage.GetJSON(SETTINGS)
             .then((result) => {

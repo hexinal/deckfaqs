@@ -3,6 +3,10 @@ const GAMEFAQS_ORIGIN = 'https://gamefaqs.gamespot.com';
 
 // SteamClient.Storage key for persisted settings ({ darkMode }).
 const SETTINGS = 'deckfaqs_settings';
+// SteamClient.Storage key for last reading positions ({ [guideUrl]: GuidePosition }).
+const POSITIONS = 'deckfaqs_positions';
+// How many guides remember their reading position (oldest dropped first).
+const MAX_POSITIONS = 50;
 
 const ignoreSteam = [1887720, 1070560, 1391110, 228980];
 const ignoreNonSteam = [
@@ -29,4 +33,11 @@ const ignoreNonSteam = [
     'MAME',
 ];
 
-export { GAMEFAQS_ORIGIN, SETTINGS, ignoreSteam, ignoreNonSteam };
+export {
+    GAMEFAQS_ORIGIN,
+    SETTINGS,
+    POSITIONS,
+    MAX_POSITIONS,
+    ignoreSteam,
+    ignoreNonSteam,
+};

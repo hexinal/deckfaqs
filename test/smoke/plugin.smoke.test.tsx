@@ -218,6 +218,121 @@ describe('DeckFAQs bundle', () => {
         );
     });
 
+    it('remembers the reading position per guide and restores it on reopen', async () => {
+        // jsdom has no layout: fake a 1000px-tall guide in a 200px viewport.
+        const fake = (name: 'scrollHeight' | 'clientHeight', value: number) =>
+            Object.defineProperty(HTMLElement.prototype, name, {
+                configurable: true,
+                get: () => value,
+            });
+        fake('scrollHeight', 1000);
+        fake('clientHeight', 200);
+        // ...and, like a browser, shift guide content up by the scroll offset.
+        // eslint-disable-next-line @typescript-eslint/unbound-method
+        const realRect = HTMLElement.prototype.getBoundingClientRect;
+        HTMLElement.prototype.getBoundingClientRect = function (
+            this: HTMLElement
+        ) {
+            const scroller = this.closest('.deckfaqs_guide')?.parentElement;
+            const top = scroller ? -scroller.scrollTop : 0;
+            return { ...realRect.call(this), top, y: top, bottom: top };
+        };
+        const guideUrl =
+            'https://gamefaqs.gamespot.com/ps2/197344-final-fantasy-x/faqs/69037';
+        const scroller = () =>
+            document.querySelector('.deckfaqs_guide')!.parentElement!;
+        try {
+            openPanel();
+            await openGuide();
+            // Fresh guide (no saved position): stays at the top.
+            expect(scroller().scrollTop).toBe(0);
+            // Scroll halfway; Back flushes the position to storage.
+            scroller().scrollTop = 400;
+            fireEvent.scroll(scroller());
+            clickButton(/^Back$/);
+            await screen.findByText('Guides');
+            expect(steam.storage.get('deckfaqs_positions')).toMatchObject({
+                [guideUrl]: {
+                    page: '',
+                    ratio: 0.5,
+                    // jsdom has no layout, so every anchor sits at 0 and the
+                    // last one wins; 400px past it in a 200px viewport.
+                    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+                    anchor: expect.any(String),
+                    offset: 2,
+                },
+            });
+            // Reopen: same guide lands where we left off.
+            clickButton(/FFX FAQ\/Walkthrough/);
+            await waitFor(() =>
+                expect(document.querySelector('#faqwrap')).not.toBeNull()
+            );
+            await waitFor(() => expect(scroller().scrollTop).toBe(400));
+            // The fullscreen view starts at the panel's position too.
+            const Fullscreen = routes.get('/deckfaqs-fullscreen');
+            const view: RenderResult = render(React.createElement(Fullscreen!));
+            const fsScroller =
+                view.container.querySelector('.deckfaqs_guide')!.parentElement!;
+            await waitFor(() => expect(fsScroller.scrollTop).toBe(400));
+
+            // Navigating to another page (TOC) records that page; reopening
+            // fetches it directly and restores the ratio there.
+            view.unmount();
+            const toc = screen.getByRole('combobox', { name: 'TOC' });
+            cef.loadUrl.mockClear();
+            fireEvent.change(toc, { target: { value: '?page=1#section48' } });
+            await waitFor(() =>
+                expect(cef.loadUrl).toHaveBeenCalledWith(
+                    `${guideUrl}/?page=1#section48`
+                )
+            );
+            await waitFor(() =>
+                expect(document.querySelector('#faqwrap')).not.toBeNull()
+            );
+            scroller().scrollTop = 200;
+            fireEvent.scroll(scroller());
+            clickButton(/^Back$/);
+            await screen.findByText('Guides');
+            expect(steam.storage.get('deckfaqs_positions')).toMatchObject({
+                [guideUrl]: { page: '?page=1', ratio: 0.25 },
+            });
+            cef.loadUrl.mockClear();
+            clickButton(/FFX FAQ\/Walkthrough/);
+            await waitFor(() =>
+                expect(cef.loadUrl).toHaveBeenCalledWith(`${guideUrl}/?page=1`)
+            );
+            await waitFor(() =>
+                expect(document.querySelector('#faqwrap')).not.toBeNull()
+            );
+            await waitFor(() => expect(scroller().scrollTop).toBe(200));
+            // Reload always goes back to the first page and records that.
+            const reload = screen
+                .getAllByRole('button')
+                .filter((b) => b.textContent === '')[1]!;
+            cef.loadUrl.mockClear();
+            fireEvent.click(reload);
+            await waitFor(() =>
+                expect(cef.loadUrl).toHaveBeenCalledWith(guideUrl)
+            );
+            await waitFor(() =>
+                expect(document.querySelector('#faqwrap')).not.toBeNull()
+            );
+            scroller().scrollTop = 0;
+            fireEvent.scroll(scroller());
+            clickButton(/^Back$/);
+            await screen.findByText('Guides');
+            expect(steam.storage.get('deckfaqs_positions')).toMatchObject({
+                [guideUrl]: { page: '', ratio: 0 },
+            });
+        } finally {
+            HTMLElement.prototype.getBoundingClientRect = realRect;
+            delete (HTMLElement.prototype as { scrollHeight?: number })
+                .scrollHeight;
+            delete (HTMLElement.prototype as { clientHeight?: number })
+                .clientHeight;
+        }
+    });
+
     it('Back walks guide -> guides -> results -> games and Home jumps to games', async () => {
         openPanel();
         await openGuide();
