@@ -103,8 +103,8 @@ type NonSteamGame = {
     appid: number;
     sort_as: string;
     display_name: string;
-}
+};
 
 declare namespace collectionStore {
-    const deckDesktopApps: {allApps: NonSteamGame[]};
+    const deckDesktopApps: { allApps: NonSteamGame[] };
 }

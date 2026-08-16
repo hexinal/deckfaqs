@@ -1,7 +1,7 @@
-import { ButtonItem, PanelSection, PanelSectionRow } from 'decky-frontend-lib';
-import React, { useContext, useMemo } from 'react';
+import { ButtonItem, PanelSection, PanelSectionRow } from '@decky/ui';
+import { useContext, useMemo } from 'react';
 import { AppContext } from '../../context/AppContext';
-import { DefaultProps, gameSearch } from '../../utils';
+import { gameSearch } from '../../utils';
 import { List } from './List';
 
 export type SearchResult = {
@@ -9,11 +9,11 @@ export type SearchResult = {
     url: string | undefined;
 };
 
-export const GameList = ({ serverApi }: DefaultProps) => {
+export const GameList = () => {
     const { state, dispatch, browserView } = useContext(AppContext);
 
     const search = (game: string) => {
-        gameSearch(game, serverApi, browserView, dispatch);
+        gameSearch(game, browserView, dispatch);
     };
 
     const { runningGame, games } = state;

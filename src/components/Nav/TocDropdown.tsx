@@ -1,14 +1,14 @@
-import { Dropdown } from 'decky-frontend-lib';
-import React, { useContext } from 'react';
+import { Dropdown } from '@decky/ui';
+import { useContext, type CSSProperties } from 'react';
 import { AppContext } from '../../context/AppContext';
 import { ActionType } from '../../reducers/AppReducer';
-import { DefaultProps, getGuideHtml } from '../../utils';
+import { getGuideHtml } from '../../utils';
 
-type TocDropdownProps = DefaultProps & {
-    style?: React.CSSProperties;
+type TocDropdownProps = {
+    style?: CSSProperties;
 };
 
-export const TocDropdown = ({ serverApi, style }: TocDropdownProps) => {
+export const TocDropdown = ({ style }: TocDropdownProps) => {
     const {
         state: { currentGuide },
         dispatch,
@@ -26,7 +26,7 @@ export const TocDropdown = ({ serverApi, style }: TocDropdownProps) => {
             });
         } else {
             dispatch({ type: ActionType.UPDATE_LOADING, payload: true });
-            getGuideHtml(href, serverApi, browserView, (result: string) => {
+            getGuideHtml(href, browserView, (result: string) => {
                 if (path.indexOf('#') > 0) {
                     anchor = path.substring(path.indexOf('#') + 1);
                 }

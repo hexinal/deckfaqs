@@ -4,8 +4,8 @@ import {
     Navigation,
     QuickAccessTab,
     showModal,
-} from 'decky-frontend-lib';
-import React, { useContext } from 'react';
+} from '@decky/ui';
+import { useContext } from 'react';
 import { BsSearch, BsArrowBarDown, BsArrowBarUp } from 'react-icons/bs';
 import { AppContext, initSearchState } from '../../context/AppContext';
 import { ActionType } from '../../reducers/AppReducer';

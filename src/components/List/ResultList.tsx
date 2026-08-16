@@ -1,11 +1,11 @@
-import React, { useContext, useMemo } from 'react';
+import { useContext, useMemo } from 'react';
 import { faqsNightmareRegex } from '../../constants';
 import { AppContext } from '../../context/AppContext';
 import { ActionType } from '../../reducers/AppReducer';
-import { DefaultProps, getContent } from '../../utils';
+import { getContent } from '../../utils';
 import { List, ListItem } from './List';
 
-export const ResultList = ({ serverApi }: DefaultProps) => {
+export const ResultList = () => {
     const {
         state: { searchResults },
         dispatch,
@@ -21,7 +21,6 @@ export const ResultList = ({ serverApi }: DefaultProps) => {
         });
         getContent(
             faqUrl,
-            serverApi,
             browserView,
             `function get_guides() {
                 let content = document.getElementsByClassName("guides")

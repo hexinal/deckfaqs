@@ -1,5 +1,5 @@
-import { PanelSectionRow, ButtonItem } from 'decky-frontend-lib';
-import React, { useCallback } from 'react';
+import { PanelSectionRow, ButtonItem } from '@decky/ui';
+import { useCallback } from 'react';
 
 type ListElementProps = {
     displayText: string;
