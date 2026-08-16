@@ -27,7 +27,13 @@ import parse, {
 } from 'html-react-parser';
 import { ActionType } from '../../reducers/AppReducer';
 import { getGuideHtml, request } from '../../utils';
-import { imageOrigins, pageOf, pageUrl, sourceOf } from '../../sources/source';
+import {
+    imageOrigins,
+    pageOf,
+    pageUrl,
+    sourceOf,
+    tocSectionFor,
+} from '../../sources/source';
 import {
     type AnchorTop,
     getPosition,
@@ -72,13 +78,20 @@ export const Guide = ({ fullscreen }: GuideProps) => {
                     domNode.attribs.href
                 ) {
                     const children = domNode.children;
+                    // html-react-parser hands over raw attributes: keep the guide's own
+                    // class (e.g. Neoseeker's prev/next links) next to ours.
+                    const { class: linkClass, ...linkAttribs } =
+                        domNode.attribs;
+                    const className = linkClass
+                        ? `deckfaqs-link ${linkClass}`
+                        : 'deckfaqs-link';
                     let anchor = '';
                     if (domNode.attribs.href.startsWith('#')) {
                         anchor = domNode.attribs.href.substring(1);
                         return (
                             <a
-                                {...domNode.attribs}
-                                className="deckfaqs-link"
+                                {...linkAttribs}
+                                className={className}
                                 onClick={(e) => {
                                     e.preventDefault();
                                     dispatch({
@@ -91,15 +104,15 @@ export const Guide = ({ fullscreen }: GuideProps) => {
                                     });
                                 }}
                             >
-                                {domToReact(children as DOMNode[])}
+                                {domToReact(children as DOMNode[], options)}
                             </a>
                         );
                     } else {
                         anchor = domNode.attribs.href;
                         return (
                             <a
-                                {...domNode.attribs}
-                                className="deckfaqs-link"
+                                {...linkAttribs}
+                                className={className}
                                 onClick={(e) => {
                                     e.preventDefault();
                                     const baseUrl =
@@ -128,6 +141,14 @@ export const Guide = ({ fullscreen }: GuideProps) => {
                                                     guideHtml: html,
                                                     anchor: target.anchor,
                                                     page: target.page,
+                                                    // Keep the TOC dropdown on the page we landed on.
+                                                    currentTocSection:
+                                                        tocSectionFor(
+                                                            currentGuide?.guideToc,
+                                                            baseUrl,
+                                                            target.page
+                                                        ) ??
+                                                        currentGuide?.currentTocSection,
                                                     restore: undefined,
                                                 },
                                             });
@@ -135,7 +156,7 @@ export const Guide = ({ fullscreen }: GuideProps) => {
                                     );
                                 }}
                             >
-                                {domToReact(children as DOMNode[])}
+                                {domToReact(children as DOMNode[], options)}
                             </a>
                         );
                     }
@@ -164,7 +185,8 @@ export const Guide = ({ fullscreen }: GuideProps) => {
                     }
                     if (!allowed.some((origin) => src.startsWith(`${origin}/`)))
                         return <></>;
-                    return <img {...domNode.attribs} src={src} />;
+                    const { class: className, ...attribs } = domNode.attribs;
+                    return <img {...attribs} className={className} src={src} />;
                 }
                 return domNode;
             },
@@ -224,16 +246,36 @@ export const Guide = ({ fullscreen }: GuideProps) => {
         (anchor: string = '') => {
             if (anchor.length > 0) {
                 // Anchors come from guide markup; escape so odd characters can't
-                // break the selector and throw.
-                const escaped = CSS.escape(anchor);
-                const elementToScrollTo =
-                    guideDiv.current?.querySelector(`[name="${escaped}"]`) ??
-                    guideDiv.current?.querySelector(`[id="${escaped}"]`);
+                // break the selector and throw. Like a browser, try the
+                // percent-decoded form first (wiki links encode UTF-8 fragments).
+                const candidates = [anchor];
+                try {
+                    const decoded = decodeURIComponent(anchor);
+                    if (decoded !== anchor) candidates.unshift(decoded);
+                } catch {
+                    // not percent-encoded
+                }
+                let elementToScrollTo: globalThis.Element | null = null;
+                for (const candidate of candidates) {
+                    const escaped = CSS.escape(candidate);
+                    elementToScrollTo =
+                        guideDiv.current?.querySelector(
+                            `[name="${escaped}"]`
+                        ) ??
+                        guideDiv.current?.querySelector(`[id="${escaped}"]`) ??
+                        null;
+                    if (elementToScrollTo) break;
+                }
+                const guide = stateRef.current.currentGuide;
                 if (elementToScrollTo) {
                     elementToScrollTo.scrollIntoView();
-                } else {
-                    const guide = stateRef.current.currentGuide;
-                    const baseUrl = guide?.guideUrl ?? '';
+                } else if (
+                    guide?.page &&
+                    sourceOf(guide.guideUrl ?? '') === 'gamefaqs'
+                ) {
+                    // GameFAQs only: a bare #anchor may live on the guide's first
+                    // page. Wiki fragments are page-local, so a miss stays put.
+                    const baseUrl = guide.guideUrl ?? '';
                     request(
                         { browserView, dispatch },
                         (ctx) =>
@@ -772,7 +814,66 @@ export const Guide = ({ fullscreen }: GuideProps) => {
                       .ffaq.imgmain img.imgresize {
                         max-width: 100%;
                         width: 100%;
-                      }`}
+                      }
+                      /* Neoseeker: wiki walkthrough pages (MediaWiki markup) */
+                      .ffaq.neo-wiki h1 { font-size: 20px; margin: 0 0 10px; }
+                      .ffaq.neo-wiki h2 { font-size: 17px; margin: 16px 0 6px; }
+                      .ffaq.neo-wiki h3 { font-size: 15px; margin: 14px 0 6px; }
+                      .ffaq.neo-wiki h4 { font-size: 14px; margin: 12px 0 4px; }
+                      .ffaq.neo-wiki center { display: block; text-align: center; }
+                      .ffaq.neo-wiki hr { margin: 12px 0; }
+                      .ffaq.neo-wiki img { max-width: 100%; height: auto; }
+                      .ffaq.neo-wiki .img-icon { vertical-align: middle; }
+                      .ffaq.neo-wiki .icon { display: none; }
+                      .ffaq.neo-wiki .alert {
+                        border: 1px solid #999;
+                        border-left-width: 5px;
+                        padding: 6px 10px;
+                        margin: 10px 0;
+                        background: #eee;
+                      }
+                      .ffaq.neo-wiki .alert-primary,
+                      .ffaq.neo-wiki .alert-info { background: #d9edf7; border-left-color: #3a87ad; }
+                      .ffaq.neo-wiki .alert-success { background: #dff0d8; border-left-color: #468847; }
+                      .ffaq.neo-wiki .alert-error,
+                      .ffaq.neo-wiki .alert-danger { background: #f2dede; border-left-color: #b94a48; }
+                      .ffaq.neo-wiki .alert-secondary { border-left-color: #777; }
+                      .ffaq.neo-wiki .section-info {
+                        border: 1px solid #999;
+                        padding: 6px;
+                        margin: 10px 0;
+                      }
+                      .ffaq.neo-wiki table.wikitable,
+                      .ffaq.neo-wiki table.table-list {
+                        width: 100%;
+                        border-collapse: collapse;
+                      }
+                      .deckfaqs_guide_compact .ffaq.neo-wiki table {
+                        display: block;
+                        overflow-x: auto;
+                      }
+                      .ffaq .neo-nav {
+                        display: flex;
+                        justify-content: space-between;
+                        gap: 12px;
+                        margin: 16px 0;
+                        font-weight: bold;
+                      }
+                      .ffaq .neo-nav .neo-next { margin-left: auto; text-align: right; }
+                      /* Neoseeker: user-submitted FAQs (GameFAQs-style markup) */
+                      .ffaq.neo-faq h1 { font-size: 18px; margin: 0 0 6px; }
+                      .ffaq.neo-faq .author_area { font-size: 12px; color: #444; margin-bottom: 10px; }
+                      .ffaq.neo-faq .copyright { font-size: 11px; margin-top: 16px; }
+                      .ffaq.neo-faq .table-wrapper { overflow-x: auto; }
+                      .ffaq.neo-faq img { max-width: 100%; height: auto; }
+                      /* Neoseeker: map images */
+                      .ffaq.neo-image img {
+                        display: block;
+                        max-width: 100%;
+                        height: auto;
+                        margin: 0 auto;
+                      }
+                      .deckfaqs_dark .ffaq.neo-image img { filter: invert(1); }`}
                     </style>
                     <ScrollPanel
                         onOKButton={() => {

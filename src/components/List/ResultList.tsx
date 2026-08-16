@@ -74,7 +74,12 @@ export const ResultList = () => {
                         <span style={{ flex: '1 1 auto' }}>{searchNotice}</span>
                         <DialogButton
                             disableNavSounds={true}
-                            style={{ flex: '0 0 auto', width: 'auto' }}
+                            style={{
+                                flex: '0 0 auto',
+                                width: 'auto',
+                                minWidth: '0px',
+                                padding: '8px 14px',
+                            }}
                             onClick={retrySearch}
                         >
                             Retry

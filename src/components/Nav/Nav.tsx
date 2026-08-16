@@ -16,7 +16,11 @@ import { FiRotateCw } from 'react-icons/fi';
 import { AppContext } from '../../context/AppContext';
 import { SETTINGS } from '../../constants';
 import { ActionType } from '../../reducers/AppReducer';
-import { isGuideSource, type GuideSource } from '../../sources/source';
+import {
+    isGuideSource,
+    tocSectionFor,
+    type GuideSource,
+} from '../../sources/source';
 import {
     cancelPendingRequests,
     gameSearch,
@@ -71,6 +75,7 @@ export const Nav = () => {
                             guideHtml: html,
                             guideUrl,
                             guideToc: toc,
+                            currentTocSection: tocSectionFor(toc, guideUrl, ''),
                             page: '',
                         },
                     });

@@ -241,6 +241,73 @@ describe('getGuideHtml', () => {
         expect(loadUrl.mock.calls[0]?.[0]).toBe(url);
         expect(loadUrl).toHaveBeenCalledTimes(2);
     });
+    it('keeps guides to plain HTML: no media, forms, styles or svg', async () => {
+        const { fetchNoCors, executeInTab } = await import('@decky/api');
+        const url = 'https://gamefaqs.gamespot.com/ps2/1-x/faqs/2';
+        vi.mocked(fetchNoCors).mockResolvedValue({
+            ok: true,
+            json: () => Promise.resolve([{ url, title: 'Guide' }]),
+        } as Response);
+        vi.mocked(executeInTab).mockResolvedValue({
+            success: true,
+            result: JSON.stringify({
+                guide:
+                    '<div id="faqwrap"><img src="/a.png" srcset="//evil.example/b.png 2x" sizes="1px">' +
+                    '<picture><source srcset="//evil.example/c.png"><img src="/d.png"></picture>' +
+                    '<video src="//evil.example/v.mp4" poster="//evil.example/p.png"></video>' +
+                    '<table background="//evil.example/t.png"><tr><td>x</td></tr></table>' +
+                    '<style>body{display:none}</style><svg><image href="//evil.example/s.png"/></svg>' +
+                    '<form action="https://evil.example"><input type="image" src="//evil.example/i.png"><button>go</button></form>' +
+                    '<p>text</p></div>',
+                toc: [],
+            }),
+        });
+        const browserView = { LoadURL: vi.fn() } as unknown as BrowserView;
+        const page = await getGuideHtml(url, {
+            browserView,
+            cancelled: () => false,
+        });
+        expect(page.html).not.toMatch(/evil\.example/);
+        expect(page.html).not.toMatch(
+            /<(video|source|picture|style|svg|form|input|button)/
+        );
+        expect(page.html).toContain('<img src="/a.png">');
+        expect(page.html).toContain('<img src="/d.png">');
+        expect(page.html).toContain('<td>x</td>');
+        expect(page.html).toContain('<p>text</p>');
+    });
+    it('runs the Neoseeker extractor for Neoseeker pages', async () => {
+        const { fetchNoCors, executeInTab } = await import('@decky/api');
+        const url = 'https://www.neoseeker.com/dragon-quest-xi/walkthrough';
+        vi.mocked(fetchNoCors).mockResolvedValue({
+            ok: true,
+            json: () => Promise.resolve([{ url, title: 'Guide' }]),
+        } as Response);
+        vi.mocked(executeInTab).mockResolvedValue({
+            success: true,
+            result: JSON.stringify({
+                guide: '<div id="faqwrap"></div>',
+                toc: [],
+            }),
+        });
+        const browserView = { LoadURL: vi.fn() } as unknown as BrowserView;
+        await getGuideHtml(url, { browserView, cancelled: () => false });
+        const code = vi.mocked(executeInTab).mock.lastCall?.[2] ?? '';
+        expect(code).toContain('get_neo_guide');
+    });
+    it('renders Neoseeker map images without loading anything', async () => {
+        const loadUrl = vi.fn();
+        const browserView = { LoadURL: loadUrl } as unknown as BrowserView;
+        const page = await getGuideHtml(
+            'https://faqs.neoseeker.com/Games/Switch/map_2d_01.jpg',
+            { browserView, cancelled: () => false }
+        );
+        expect(page).toEqual({
+            html: '<div id="faqwrap" class="ffaq neo-image"><img src="https://faqs.neoseeker.com/Games/Switch/map_2d_01.jpg" alt=""></div>',
+            toc: [],
+        });
+        expect(loadUrl).not.toHaveBeenCalled();
+    });
 });
 
 describe('gameSearch', () => {
@@ -381,17 +448,17 @@ describe('gameSearch', () => {
             result: '',
         });
         gfDown = true;
-        gameSearch('Hades', browserView, dispatch, 'both');
-        await vi.waitFor(
-            () => {
-                expect(dispatched[dispatched.length - 1]?.type).toBe(
-                    ActionType.UPDATE_ERROR
-                );
-            },
-            { timeout: 15_000 }
-        );
+        vi.useFakeTimers();
+        try {
+            gameSearch('Hades', browserView, dispatch, 'both');
+            // The BrowserView side polls MAX_POLLING x 100 ms before giving up.
+            await vi.advanceTimersByTimeAsync(11_000);
+        } finally {
+            vi.useRealTimers();
+        }
         expect(dispatched[dispatched.length - 1]).toMatchObject({
+            type: ActionType.UPDATE_ERROR,
             payload: /Couldn't load GameFAQs/,
         });
-    }, 20_000);
+    });
 });

@@ -30,6 +30,9 @@ afterEach(() => {
     cleanup();
     document.querySelectorAll('[data-modal]').forEach((el) => el.remove());
     cef.reset();
+    // Settings are read on every panel mount: reseed so one test's toggles
+    // cannot leak into the next.
+    steam.storage.set('deckfaqs_settings', { darkMode: true });
 });
 
 const openPanel = () => render(plugin.content);
@@ -208,12 +211,6 @@ describe('DeckFAQs bundle', () => {
         expect(cef.qsRequests).toEqual(['chrono_trigger']);
         expect(cef.loadUrl).not.toHaveBeenCalled();
         await screen.findByRole('button', { name: /^Chrono Trigger$/ });
-        // Restore the default for the tests that follow.
-        clickButton(/^Back$/);
-        fireEvent.change(
-            await screen.findByRole('combobox', { name: 'Guide source' }),
-            { target: { value: 'both' } }
-        );
     });
 
     it('lists Neoseeker walkthroughs, FAQs and maps by category', async () => {
@@ -241,6 +238,212 @@ describe('DeckFAQs bundle', () => {
         expect(
             screen.getByText('Non-English Walkthroughs & FAQs')
         ).toBeInTheDocument();
+    });
+
+    /** ... -> Neoseeker guide list of Dragon Quest XI (found via the search dialog). */
+    const openNeoGuideList = async () => {
+        await screen.findByText('Installed Games');
+        clickButton(/search games/i);
+        const input = await screen.findByLabelText('search');
+        fireEvent.change(input, { target: { value: 'Dragon Quest XI' } });
+        fireEvent.keyDown(input, { key: 'Enter' });
+        await screen.findByText('Search Results');
+        clickButton(/^Dragon Quest XI: Echoes of an Elusive Age$/);
+        await screen.findByText('Guides');
+        await screen.findByRole('button', { name: /^Walkthrough \(PS4\)/ });
+    };
+
+    /**
+     * jsdom has no layout: fake a 1000px-tall guide in a 200px viewport whose
+     * content shifts up by the scroll offset (as the GameFAQs positions test
+     * does). Returns the undo function.
+     */
+    const fakeLayout = () => {
+        const fake = (name: 'scrollHeight' | 'clientHeight', value: number) =>
+            Object.defineProperty(HTMLElement.prototype, name, {
+                configurable: true,
+                get: () => value,
+            });
+        fake('scrollHeight', 1000);
+        fake('clientHeight', 200);
+        // eslint-disable-next-line @typescript-eslint/unbound-method
+        const realRect = HTMLElement.prototype.getBoundingClientRect;
+        HTMLElement.prototype.getBoundingClientRect = function (
+            this: HTMLElement
+        ) {
+            const scroller = this.closest('.deckfaqs_guide')?.parentElement;
+            const top = scroller ? -scroller.scrollTop : 0;
+            return { ...realRect.call(this), top, y: top, bottom: top };
+        };
+        return () => {
+            HTMLElement.prototype.getBoundingClientRect = realRect;
+            Reflect.deleteProperty(HTMLElement.prototype, 'scrollHeight');
+            Reflect.deleteProperty(HTMLElement.prototype, 'clientHeight');
+        };
+    };
+
+    it('renders a Neoseeker wiki walkthrough with its TOC, sub-pages and positions', async () => {
+        const undoLayout = fakeLayout();
+        const guideUrl =
+            'https://www.neoseeker.com/dragon-quest-xi/walkthrough';
+        const subPage =
+            'https://www.neoseeker.com/dragon-quest-xi/Coming_of_Age:_The_Prologue';
+        const scroller = () =>
+            document.querySelector('.deckfaqs_guide')!.parentElement!;
+        try {
+            openPanel();
+            await openNeoGuideList();
+            clickButton(/^Walkthrough \(PS4\)/);
+            await waitFor(() =>
+                expect(
+                    document.querySelector('#faqwrap.neo-wiki')
+                ).not.toBeNull()
+            );
+            expect(cef.loadUrl).toHaveBeenCalledWith(guideUrl);
+            const faq = document.querySelector('#faqwrap')!;
+            expect(faq.querySelector('h1')?.textContent).toMatch(
+                /Dragon Quest XI.*Walkthrough and Guide/
+            );
+            expect(
+                faq.querySelector('img[src^="https://cdn.staticneo.com/"]')
+            ).not.toBeNull();
+            const next = faq.querySelector('.neo-nav a')!;
+            expect(next.textContent).toMatch(/^Next: /);
+            expect(next.className).toBe('deckfaqs-link neo-next');
+            const toc = screen.getByRole('combobox', { name: 'TOC' });
+            const labels = within(toc)
+                .getAllByRole('option')
+                .map((o) => o.textContent);
+            expect(labels).toContain('Guide Home');
+            expect(labels).toContain('Coming of Age: The Prologue');
+            expect(labels).toContain('Fun-Size Forge');
+            expect(toc).toHaveValue(guideUrl); // "Guide Home" selected
+
+            // Sub-page via the TOC: loaded by its absolute URL, sanitised, TOC follows.
+            cef.loadUrl.mockClear();
+            fireEvent.change(toc, { target: { value: subPage } });
+            await waitFor(() =>
+                expect(cef.loadUrl).toHaveBeenCalledWith(subPage)
+            );
+            await waitFor(() =>
+                expect(document.querySelector('#fixture-unsafe')).not.toBeNull()
+            );
+            const page = document.querySelector('#faqwrap')!;
+            expect(page.querySelector('script, [style], [onclick]')).toBeNull();
+            expect(page.querySelector('img[src*="evil.example"]')).toBeNull();
+            expect(
+                page.querySelector('img[src^="https://cdn.staticneo.com/"]')
+            ).not.toBeNull();
+            expect(
+                page.querySelector('#fixture-links a[href*="example.com"]')
+            ).toBeNull();
+            expect(page.querySelector('#fixture-links')?.textContent).toContain(
+                'an external site'
+            );
+            expect(page.querySelector('.neo-nav a')?.textContent).toBe(
+                '« Home'
+            );
+            expect(screen.getByRole('combobox', { name: 'TOC' })).toHaveValue(
+                subPage
+            );
+
+            // Scroll, Back: the position remembers the sub-page; reopening returns to it.
+            scroller().scrollTop = 400;
+            fireEvent.scroll(scroller());
+            clickButton(/^Back$/);
+            await screen.findByText('Guides');
+            expect(steam.storage.get('deckfaqs_positions')).toMatchObject({
+                [guideUrl]: { page: subPage, ratio: 0.5 },
+            });
+            cef.loadUrl.mockClear();
+            clickButton(/^Walkthrough \(PS4\)/);
+            await waitFor(() =>
+                expect(cef.loadUrl).toHaveBeenCalledWith(subPage)
+            );
+            await waitFor(() =>
+                expect(document.querySelector('#fixture-links')).not.toBeNull()
+            );
+            await waitFor(() => expect(scroller().scrollTop).toBe(400));
+            // In-guide link back to the landing page.
+            cef.loadUrl.mockClear();
+            fireEvent.click(screen.getByText('« Home'));
+            await waitFor(() =>
+                expect(cef.loadUrl).toHaveBeenCalledWith(guideUrl)
+            );
+            await waitFor(() =>
+                expect(
+                    document.querySelector('#faqwrap h1')?.textContent
+                ).toMatch(/Walkthrough and Guide/)
+            );
+        } finally {
+            undoLayout();
+        }
+    });
+
+    it('renders Neoseeker HTML and text FAQs and map images', async () => {
+        openPanel();
+        await openNeoGuideList();
+        // HTML FAQ: GameFAQs-style markup with an anchor TOC.
+        clickButton(/^Bestiary \(PS4\)/);
+        await waitFor(() =>
+            expect(document.querySelector('#faqwrap.neo-faq')).not.toBeNull()
+        );
+        expect(cef.loadUrl).toHaveBeenCalledWith(
+            'https://www.neoseeker.com/dragon-quest-xi/faqs/3043257-bestiary.html'
+        );
+        expect(document.querySelector('#faqwrap table.ffaq')).not.toBeNull();
+        expect(
+            document.querySelector(
+                '#faqwrap img[src^="https://i.neoseeker.com/"]'
+            )
+        ).not.toBeNull();
+        const toc = screen.getByRole('combobox', { name: 'TOC' });
+        cef.loadUrl.mockClear();
+        fireEvent.change(toc, {
+            target: { value: '#Regional Bestiary Notes' },
+        });
+        expect(cef.loadUrl).not.toHaveBeenCalled(); // same page: an anchor scroll
+        expect(
+            document.querySelector('#faqwrap a[name="Regional Bestiary Notes"]')
+        ).not.toBeNull();
+        clickButton(/^Back$/);
+        await screen.findByText('Guides');
+        // Map image: no page load at all, just the file.
+        cef.loadUrl.mockClear();
+        clickButton(/Caverns Under Octagonia Part 1 2D Map/);
+        await waitFor(() =>
+            expect(
+                document.querySelector('#faqwrap.neo-image img')
+            ).not.toBeNull()
+        );
+        expect(
+            document
+                .querySelector('#faqwrap.neo-image img')
+                ?.getAttribute('src')
+        ).toBe(
+            'https://faqs.neoseeker.com/Games/Switch/dragon_quest_xi_s_octagonia_caverns_2d_01.jpg'
+        );
+        expect(cef.loadUrl).not.toHaveBeenCalled();
+        clickButton(/^Back$/);
+        await screen.findByText('Guides');
+        clickButton(/^Back$/);
+        await screen.findByText('Search Results');
+        clickButton(/^Back$/);
+        // Text FAQ (Chrono Trigger): plain <pre>, links removed.
+        await searchGame('chrono trigger');
+        clickButton(/^Chrono Trigger$/);
+        await screen.findByRole('button', {
+            name: /^FAQ\/Walkthrough \(PSX\) - v1.01/,
+        });
+        clickButton(/^FAQ\/Walkthrough \(PSX\) - v1.01/);
+        await waitFor(() =>
+            expect(
+                document.querySelector('#faqwrap.neo-faq-text')
+            ).not.toBeNull()
+        );
+        const pre = document.querySelector('#faqwrap .faqtext pre')!;
+        expect(pre.textContent).toContain('Chrono Trigger');
+        expect(pre.querySelector('a')).toBeNull();
     });
 
     it('extracts the guide list from the real /faqs page', async () => {

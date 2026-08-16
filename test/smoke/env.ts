@@ -42,6 +42,14 @@ const pages: Record<string, () => string> = {
         fixture('neoseeker/faqs-chrono-trigger.html'),
     'www.neoseeker.com/dragon-quest-xi/faqs': () =>
         fixture('neoseeker/faqs-dragon-quest-xi.html'),
+    'www.neoseeker.com/dragon-quest-xi/walkthrough': () =>
+        fixture('neoseeker/walkthrough-dragon-quest-xi.html'),
+    'www.neoseeker.com/dragon-quest-xi/Coming_of_Age:_The_Prologue': () =>
+        fixture('neoseeker/wiki-dqxi-coming-of-age.html'),
+    'www.neoseeker.com/dragon-quest-xi/faqs/3043257-bestiary.html': () =>
+        fixture('neoseeker/faq-html-dqxi-bestiary.html'),
+    'www.neoseeker.com/chrono-trigger/faqs/131223-o.html': () =>
+        fixture('neoseeker/faq-text-chrono-trigger.html'),
 };
 
 // Neoseeker's quick-search: static JSONP on its CDN, fetched with fetchNoCors

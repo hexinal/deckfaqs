@@ -1,15 +1,20 @@
 import { executeInTab, fetchNoCors } from '@decky/api';
-import DOMPurify from 'dompurify';
 import type { Dispatch } from 'react';
 import type { BrowserView, TableOfContentEntry } from './context/AppContext';
 import { ActionType, type AppActions } from './reducers/AppReducer';
+import { sanitizeGuideHtml } from './sanitize';
 import {
     gamefaqsSearchUrl,
     getGamesCode,
     getGuideCode,
     parseSearchResults,
 } from './sources/gamefaqs';
-import { neoGameSearch } from './sources/neoseeker';
+import {
+    isNeoImageUrl,
+    neoGameSearch,
+    neoGuideCode,
+    neoImagePage,
+} from './sources/neoseeker';
 import {
     badPayloadError,
     isAllowedScrapeUrl,
@@ -195,12 +200,15 @@ export const getGuideHtml = async (
     url: string,
     ctx: RequestContext
 ): Promise<GuidePage> => {
-    const raw = await scrapeUrl(url, ctx, getGuideCode);
+    // Map images are plain files: nothing to load in the view.
+    if (isNeoImageUrl(url)) return neoImagePage(url);
+    const code = sourceOf(url) === 'neoseeker' ? neoGuideCode : getGuideCode;
+    const raw = await scrapeUrl(url, ctx, code);
     if (!raw) return { html: '', toc: [] };
     try {
         const body = JSON.parse(raw) as { guide?: string; toc?: unknown };
         return {
-            html: DOMPurify.sanitize(body.guide ?? ''),
+            html: sanitizeGuideHtml(body.guide ?? ''),
             toc: Array.isArray(body.toc)
                 ? (body.toc as TableOfContentEntry[])
                 : [],

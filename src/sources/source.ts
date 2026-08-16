@@ -63,13 +63,17 @@ export const guideListUrl = (gameUrl: string): string => {
 /**
  * URL to load for `page` of a guide ('' = the guide itself). GameFAQs pages
  * are `?page=N` fragments living under `<guide>/`; Neoseeker pages are ordinary
- * absolute URLs (wiki sub-pages).
+ * absolute URLs (wiki sub-pages). Neoseeker fragments are dropped: the anchor
+ * is scrolled to by the viewer, and CEF reports fragments verbatim (raw `'`),
+ * which would defeat the exact tab-URL match in utils.ts.
  */
 export const pageUrl = (guideUrl: string, page = ''): string => {
     if (!page) return guideUrl;
     if (sourceOf(guideUrl) === 'gamefaqs') return `${guideUrl}/${page}`;
     try {
-        return new URL(page, guideUrl).href;
+        const url = new URL(page, guideUrl);
+        url.hash = '';
+        return url.href;
     } catch {
         return guideUrl;
     }

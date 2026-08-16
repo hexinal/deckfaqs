@@ -5,7 +5,7 @@ import {
     getGuideCode,
     getGamesCode,
 } from '../src/sources/gamefaqs';
-import { neoGuidesCode } from '../src/sources/neoseeker';
+import { neoGuideCode, neoGuidesCode } from '../src/sources/neoseeker';
 
 // The extraction scripts run inside the GameFAQs tab via executeInTab and
 // return the value of their last expression; mimic that with an indirect eval
@@ -192,5 +192,210 @@ describe('neoGuidesCode (Neoseeker /<slug>/faqs/ page)', () => {
                 '<h1>Walkthroughs, FAQs, Guides and Maps</h1><footer id="footer"></footer>'
             )
         ).toBe('[]');
+    });
+});
+
+describe('neoGuideCode (Neoseeker wiki and FAQ pages)', () => {
+    type Toc = Array<{ data?: string; label: string; options?: Toc }>;
+    const run = (name: string) => {
+        const raw = runInPage(neoGuideCode, fixture(`neoseeker/${name}`));
+        return JSON.parse(raw as string) as { guide: string; toc: Toc };
+    };
+    const dom = (html: string) => {
+        const div = document.createElement('div');
+        div.innerHTML = html;
+        return div;
+    };
+
+    it('wraps a wiki landing page in #faqwrap with title, prev/next and the sidebar TOC', () => {
+        const { guide, toc } = run('walkthrough-dragon-quest-xi.html');
+        const root = dom(guide).firstElementChild!;
+        expect(root.id).toBe('faqwrap');
+        expect(root.className).toBe('ffaq neo-wiki');
+        expect(root.querySelector('h1')?.textContent).toBe(
+            'Dragon Quest XI: Echoes of an Elusive Age Walkthrough and Guide'
+        );
+        expect(root.querySelector('.mw-headline#Introduction')).not.toBeNull();
+        expect(root.querySelector('script, style, .noprint')).toBeNull();
+        // Landing page: only a "Next" link.
+        const nav = [...root.querySelectorAll('.neo-nav a')].map((a) => [
+            a.className,
+            a.getAttribute('href'),
+            a.textContent,
+        ]);
+        expect(nav).toEqual([
+            [
+                'neo-next',
+                'https://www.neoseeker.com/dragon-quest-xi/Coming_of_Age:_The_Prologue',
+                'Next: Coming of Age: The Prologue »',
+            ],
+        ]);
+        // Same-guide links inside the article stay (absolute); image links are unwrapped.
+        expect(
+            root.querySelector(
+                'a[href="https://www.neoseeker.com/dragon-quest-xi/Adventures_with_Erik"]'
+            )
+        ).not.toBeNull();
+        expect(root.querySelector('a.image, a[href*="File:"]')).toBeNull();
+        expect(
+            root.querySelector('img[src^="https://cdn.staticneo.com/"]')
+        ).not.toBeNull();
+
+        expect(toc[0]).toEqual({
+            data: 'https://www.neoseeker.com/dragon-quest-xi/walkthrough',
+            label: 'Guide Home',
+        });
+        expect(toc[1]!.label).toBe('Walkthrough Act 1:');
+        expect(toc[1]!.options![0]).toEqual({
+            data: 'https://www.neoseeker.com/dragon-quest-xi/Coming_of_Age:_The_Prologue',
+            label: 'Coming of Age: The Prologue',
+        });
+        // Accordion groups: toggle-labelled ("Quests") and page-link-labelled ("Fun-Size Forge").
+        const flat = toc.flatMap((e) => e.options ?? [e]);
+        const quests = flat.find((e) => e.label === 'Quests');
+        expect(quests?.options?.[0]).toMatchObject({
+            data: 'https://www.neoseeker.com/dragon-quest-xi/Act_1_Quests',
+        });
+        const forge = flat.find((e) => e.label === 'Fun-Size Forge');
+        expect(forge?.options?.[0]).toEqual({
+            data: 'https://www.neoseeker.com/dragon-quest-xi/Fun-Size_Forge',
+            label: 'Fun-Size Forge',
+        });
+        expect(forge!.options!.length).toBeGreaterThan(1);
+        expect(toc.every((e) => !e.options || e.options.length > 0)).toBe(true);
+    });
+
+    it('keeps in-guide links on a sub-page and unwraps everything else', () => {
+        const { guide, toc } = run('wiki-dqxi-coming-of-age.html');
+        const root = dom(guide);
+        const links = root.querySelector('#fixture-links')!;
+        expect(
+            [...links.querySelectorAll('a')].map((a) => a.getAttribute('href'))
+        ).toEqual([
+            'https://www.neoseeker.com/dragon-quest-xi/Adventures_with_Erik',
+            'https://www.neoseeker.com/dragon-quest-xi/Heliodor#Sewers',
+            '#Cobblestone_Tor',
+        ]);
+        expect(links.textContent).toContain('the game hub');
+        expect(links.textContent).toContain('an external site');
+        expect(links.textContent).toContain('missing page');
+        // Unsafe markup is left for DOMPurify (scripts are stripped here already).
+        expect(root.querySelector('#fixture-unsafe script')).toBeNull();
+        expect(root.querySelector('#fixture-unsafe')).not.toBeNull();
+        expect(
+            root.querySelector('span.mw-headline#Cobblestone_Tor')
+        ).not.toBeNull();
+        expect(root.querySelector('table.wikitable')).not.toBeNull();
+        const nav = [...root.querySelectorAll('.neo-nav a')].map(
+            (a) => a.textContent
+        );
+        expect(nav).toEqual(['« Home', 'Next: Adventures with Erik »']);
+        expect(toc[0]!.label).toBe('Guide Home');
+        expect(toc).toHaveLength(3); // Guide Home + the two groups kept in the fixture
+    });
+
+    it('normalises an HTML FAQ (GameFAQs-style markup) and its nested TOC', () => {
+        const { guide, toc } = run('faq-html-dqxi-bestiary.html');
+        const root = dom(guide).firstElementChild!;
+        expect(root.className).toBe('ffaq neo-faq');
+        expect(root.querySelector('h1')?.textContent).toMatch(/Bestiary/);
+        expect(root.querySelector('.author_area')?.textContent).toMatch(
+            /by Jadebell/
+        );
+        expect(root.querySelector('table.ffaq')).not.toBeNull();
+        expect(root.querySelector('a[name="Introduction"]')).not.toBeNull();
+        expect(
+            root.querySelector('img[src^="https://i.neoseeker.com/"]')
+        ).not.toBeNull();
+        expect(root.querySelector('.copyright')?.textContent).toMatch(
+            /copyright/
+        );
+        // Crumbs, product header, modal and the inline TOC are not copied.
+        expect(root.querySelector('#crumbs, header, .modal, .toc')).toBeNull();
+        expect(root.querySelector('a[href^="http"]')).toBeNull();
+        expect(toc[0]).toEqual({
+            data: '#Introduction',
+            label: 'Introduction',
+        });
+        expect(toc[1]!.label).toBe('Regional Bestiary');
+        // A parent entry stays reachable as the first option of its group.
+        expect(toc[1]!.options!.slice(0, 2)).toEqual([
+            { data: '#Regional Bestiary', label: 'Regional Bestiary' },
+            {
+                data: '#Regional Bestiary Notes',
+                label: 'Regional Bestiary Notes',
+            },
+        ]);
+    });
+
+    it('wraps a text FAQ in .faqtext with no links', () => {
+        const { guide, toc } = run('faq-text-chrono-trigger.html');
+        const root = dom(guide).firstElementChild!;
+        expect(root.className).toBe('ffaq neo-faq neo-faq-text');
+        expect(root.querySelector('.faqtext > pre')).not.toBeNull();
+        expect(root.querySelector('a')).toBeNull();
+        expect(root.querySelector('pre')?.textContent).toContain(
+            'Chrono Trigger'
+        );
+        expect(root.querySelector('.author_area')?.textContent).toMatch(
+            /XMetaphysics/
+        );
+        expect(toc).toEqual([]);
+    });
+
+    it('normalises http links and skips red links in the sidebar TOC', () => {
+        const raw = runInPage(
+            neoGuideCode,
+            '<link rel="canonical" href="https://www.neoseeker.com/g/walkthrough">' +
+                '<div id="page-title"><h1>G Walkthrough</h1></div>' +
+                '<div id="wiki-content"><div class="mw-parser-output">' +
+                '<p><a href="http://www.neoseeker.com/g/Page_One">one</a> <a href="https://www.neoseeker.com/g/Page_Two#Sect">two</a></p>' +
+                '</div></div>' +
+                '<div id="wiki-navigation"><div class="wiki-toc"><ul><li class="heading">Chapters</li>' +
+                '<li><a href="https://www.neoseeker.com/g/Page_One">Page One</a></li>' +
+                '<li><a href="https://www.neoseeker.com/g/Missing?action=edit&amp;redlink=1" class="new">Missing</a></li>' +
+                '</ul></div></div><footer id="footer"></footer>'
+        );
+        const { guide, toc } = JSON.parse(raw as string) as {
+            guide: string;
+            toc: Toc;
+        };
+        expect(
+            [...dom(guide).querySelectorAll('a')].map((a) =>
+                a.getAttribute('href')
+            )
+        ).toEqual([
+            'https://www.neoseeker.com/g/Page_One',
+            'https://www.neoseeker.com/g/Page_Two#Sect',
+        ]);
+        expect(toc).toEqual([
+            {
+                label: 'Chapters',
+                options: [
+                    {
+                        data: 'https://www.neoseeker.com/g/Page_One',
+                        label: 'Page One',
+                    },
+                ],
+            },
+        ]);
+    });
+
+    it('keeps polling until the page is complete', () => {
+        expect(
+            runInPage(neoGuideCode, '<title>Just a moment...</title>')
+        ).toBeUndefined();
+        expect(
+            runInPage(
+                neoGuideCode,
+                '<div id="wiki-content"><div class="mw-parser-output"><p>partial</p></div></div>'
+            )
+        ).toBeUndefined();
+        expect(
+            runInPage(
+                neoGuideCode,
+                '<p>not a guide</p><footer id="footer"></footer>'
+            )
+        ).toBeUndefined();
     });
 });

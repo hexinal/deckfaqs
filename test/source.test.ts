@@ -99,7 +99,9 @@ describe('pageUrl / pageOf', () => {
         expect(
             pageUrl(NEO_GUIDE, '/dragon-quest-xi/Adventures_with_Erik')
         ).toBe(NEO_PAGE);
-        expect(pageUrl(NEO_GUIDE, '#Heliodor')).toBe(`${NEO_GUIDE}#Heliodor`);
+        // Fragments are the viewer's business, never part of the load.
+        expect(pageUrl(NEO_GUIDE, '#Heliodor')).toBe(NEO_GUIDE);
+        expect(pageUrl(NEO_GUIDE, `${NEO_PAGE}#Sage's_Cave`)).toBe(NEO_PAGE);
         expect(pageOf(NEO_GUIDE, `${NEO_PAGE}#Cobblestone_Tor`)).toEqual({
             page: NEO_PAGE,
             anchor: 'Cobblestone_Tor',
