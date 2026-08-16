@@ -20,7 +20,7 @@ const GUIDE_SOURCES: readonly string[] = ['both', 'gamefaqs', 'neoseeker'];
 export const isGuideSource = (value: unknown): value is GuideSource =>
     typeof value === 'string' && GUIDE_SOURCES.includes(value);
 
-const SOURCE_LABEL: Record<Source, string> = {
+export const SOURCE_LABEL: Record<Source, string> = {
     gamefaqs: 'GameFAQs',
     neoseeker: 'Neoseeker',
 };

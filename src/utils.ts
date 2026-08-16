@@ -9,12 +9,17 @@ import {
     getGuideCode,
     parseSearchResults,
 } from './sources/gamefaqs';
+import { neoGameSearch } from './sources/neoseeker';
 import {
     badPayloadError,
     isAllowedScrapeUrl,
+    SOURCE_LABEL,
     sourceOf,
     unreachableError,
+    type GuideSource,
+    type Source,
 } from './sources/source';
+import type { ListItem } from './components/List/List';
 
 async function delay(ms: number, state = null) {
     return new Promise((resolve, _reject) => {
@@ -206,26 +211,77 @@ export const getGuideHtml = async (
     }
 };
 
+export type SearchOutcome = {
+    results: ListItem[];
+    term: string;
+    /** Set when one site failed but the other still returned results. */
+    notice?: string;
+};
+
+// Merges the per-site outcomes: GameFAQs first, then Neoseeker, each under
+// its own group when both were asked. A failed site becomes a notice as long
+// as the other one had results; otherwise the failure is reported as usual.
+const mergeSearchResults = (
+    term: string,
+    source: GuideSource,
+    sides: Array<[Source, PromiseSettledResult<ListItem[]>]>
+): SearchOutcome => {
+    const results: ListItem[] = [];
+    const failures: Error[] = [];
+    for (const [site, settled] of sides) {
+        if (settled.status === 'fulfilled') {
+            for (const item of settled.value) {
+                results.push(
+                    source === 'both'
+                        ? { ...item, group: SOURCE_LABEL[site] }
+                        : item
+                );
+            }
+        } else {
+            console.error(`[DeckFAQs] ${site} search failed`, settled.reason);
+            failures.push(
+                settled.reason instanceof Error
+                    ? settled.reason
+                    : new Error(unreachableError(site))
+            );
+        }
+    }
+    const failure = failures[0];
+    if (failure && results.length === 0) throw failure;
+    return { results, term, notice: failure?.message };
+};
+
+/** Searches the selected site(s) for a game name and shows the results step. */
 export const gameSearch = (
     game: string,
     browserView: BrowserView | undefined,
-    dispatch: Dispatch<AppActions>
+    dispatch: Dispatch<AppActions>,
+    source: GuideSource = 'both'
 ) => {
     const searchUrl = gamefaqsSearchUrl(game);
+    const none = (): Promise<ListItem[]> => Promise.resolve([]);
     request(
         { browserView, dispatch },
-        (ctx) => {
+        async (ctx) => {
             dispatch({
                 type: ActionType.UPDATE_PLUGIN_STATE,
                 payload: { pluginState: 'results', isLoading: true },
             });
-            return getContent(searchUrl, ctx, getGamesCode);
+            const [gamefaqs, neoseeker] = await Promise.allSettled([
+                source === 'neoseeker'
+                    ? none()
+                    : getContent(searchUrl, ctx, getGamesCode).then(
+                          parseSearchResults
+                      ),
+                source === 'gamefaqs' ? none() : neoGameSearch(game, ctx),
+            ]);
+            return mergeSearchResults(game, source, [
+                ['gamefaqs', gamefaqs],
+                ['neoseeker', neoseeker],
+            ]);
         },
-        (raw) => {
-            dispatch({
-                type: ActionType.UPDATE_RESULTS,
-                payload: parseSearchResults(raw),
-            });
+        (outcome) => {
+            dispatch({ type: ActionType.UPDATE_RESULTS, payload: outcome });
         }
     );
 };

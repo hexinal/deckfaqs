@@ -93,10 +93,12 @@ describe('DeckFAQs bundle', () => {
         fireEvent.click(toggle);
         expect(steam.storage.get('deckfaqs_settings')).toEqual({
             darkMode: false,
+            source: 'both',
         });
         fireEvent.click(toggle);
         expect(steam.storage.get('deckfaqs_settings')).toEqual({
             darkMode: true,
+            source: 'both',
         });
     });
 
@@ -126,6 +128,91 @@ describe('DeckFAQs bundle', () => {
         await screen.findByText('Search Results');
         expect(cef.loadUrl).toHaveBeenCalledWith(
             "https://gamefaqs.gamespot.com/ajax/home_game_search?term=Baldur's+Gate"
+        );
+    });
+
+    it('searches Neoseeker alongside GameFAQs and groups the results', async () => {
+        openPanel();
+        await searchGame('chrono trigger');
+        // Neoseeker's quick-search is fetched straight from its CDN, never in the view.
+        expect(cef.qsRequests).toEqual(['chrono_trigger']);
+        expect(cef.loadUrl).not.toHaveBeenCalledWith(
+            expect.stringContaining('neoseeker')
+        );
+        expect(
+            await screen.findByRole('button', { name: /^Chrono Trigger$/ })
+        ).toBeInTheDocument();
+        const headers = screen
+            .getAllByText(/^(GameFAQs|Neoseeker)$/)
+            .map((el) => el.textContent);
+        expect(headers).toEqual(['GameFAQs', 'Neoseeker']);
+    });
+
+    it('shortens long Steam names until Neoseeker finds the game', async () => {
+        openPanel();
+        await screen.findByText('Installed Games');
+        clickButton(/search games/i);
+        const input = await screen.findByLabelText('search');
+        fireEvent.change(input, {
+            target: {
+                value: 'DRAGON QUEST XI S: Echoes of an Elusive Age - Definitive Edition',
+            },
+        });
+        fireEvent.keyDown(input, { key: 'Enter' });
+        await screen.findByText('Search Results');
+        await screen.findByRole('button', {
+            name: /^Dragon Quest XI: Echoes of an Elusive Age$/,
+        });
+        expect(cef.qsRequests).toEqual([
+            'dragon_quest_xi_s_echoes',
+            'dragon_quest_xi_s',
+            'dragon_quest_xi',
+        ]);
+    });
+
+    it('keeps GameFAQs results and offers a retry when Neoseeker is down', async () => {
+        cef.offline.add('cdn.staticneo.com');
+        openPanel();
+        await searchGame('chrono trigger');
+        expect(
+            await screen.findByRole('button', { name: /^Final Fantasy X$/ })
+        ).toBeInTheDocument();
+        expect(screen.getByText(/Couldn't load Neoseeker/)).toBeInTheDocument();
+        expect(screen.queryByText('Neoseeker')).toBeNull();
+        cef.offline.clear();
+        clickButton(/^Retry$/);
+        await screen.findByRole('button', { name: /^Chrono Trigger$/ });
+        expect(screen.queryByText(/Couldn't load Neoseeker/)).toBeNull();
+    });
+
+    it('persists the guide-source setting and honours it when searching', async () => {
+        openPanel();
+        const picker = await screen.findByRole('combobox', {
+            name: 'Guide source',
+        });
+        fireEvent.change(picker, { target: { value: 'gamefaqs' } });
+        expect(steam.storage.get('deckfaqs_settings')).toEqual({
+            darkMode: true,
+            source: 'gamefaqs',
+        });
+        await searchGame('chrono trigger');
+        expect(cef.qsRequests).toEqual([]);
+        expect(screen.queryByText('GameFAQs')).toBeNull(); // no groups for one site
+        clickButton(/^Back$/);
+        fireEvent.change(
+            await screen.findByRole('combobox', { name: 'Guide source' }),
+            { target: { value: 'neoseeker' } }
+        );
+        cef.loadUrl.mockClear();
+        await searchGame('chrono trigger');
+        expect(cef.qsRequests).toEqual(['chrono_trigger']);
+        expect(cef.loadUrl).not.toHaveBeenCalled();
+        await screen.findByRole('button', { name: /^Chrono Trigger$/ });
+        // Restore the default for the tests that follow.
+        clickButton(/^Back$/);
+        fireEvent.change(
+            await screen.findByRole('combobox', { name: 'Guide source' }),
+            { target: { value: 'both' } }
         );
     });
 

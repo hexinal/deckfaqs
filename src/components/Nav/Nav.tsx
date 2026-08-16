@@ -1,11 +1,13 @@
 import {
     DialogButton,
+    DropdownItem,
     Focusable,
     ToggleField,
     findSP,
     showModal,
     QuickAccessTab,
     Navigation,
+    type SingleDropdownOption,
 } from '@decky/ui';
 import { useCallback, useContext, useMemo } from 'react';
 import { BsArrowsFullscreen } from 'react-icons/bs';
@@ -14,6 +16,7 @@ import { FiRotateCw } from 'react-icons/fi';
 import { AppContext } from '../../context/AppContext';
 import { SETTINGS } from '../../constants';
 import { ActionType } from '../../reducers/AppReducer';
+import { isGuideSource, type GuideSource } from '../../sources/source';
 import {
     cancelPendingRequests,
     gameSearch,
@@ -30,9 +33,15 @@ const btnStyle = {
     minWidth: 0,
 };
 
+const SOURCE_OPTIONS: Array<{ data: GuideSource; label: string }> = [
+    { data: 'both', label: 'GameFAQs + Neoseeker' },
+    { data: 'gamefaqs', label: 'GameFAQs' },
+    { data: 'neoseeker', label: 'Neoseeker' },
+];
+
 export const Nav = () => {
     const {
-        state: { pluginState, currentGuide, darkMode },
+        state: { pluginState, currentGuide, darkMode, source },
         dispatch,
         browserView,
     } = useContext(AppContext);
@@ -79,18 +88,34 @@ export const Nav = () => {
         (result: boolean) => {
             dispatch({ type: ActionType.UPDATE_DARK_MODE, payload: result });
             // Persist on change; the QAM panel is alwaysRender so it rarely unmounts.
-            void SteamClient.Storage.SetObject(SETTINGS, { darkMode: result });
+            void SteamClient.Storage.SetObject(SETTINGS, {
+                darkMode: result,
+                source,
+            });
         },
-        [dispatch]
+        [dispatch, source]
+    );
+
+    const handleSource = useCallback(
+        (option: SingleDropdownOption) => {
+            const picked: unknown = option.data;
+            if (!isGuideSource(picked)) return;
+            dispatch({ type: ActionType.UPDATE_SOURCE, payload: picked });
+            void SteamClient.Storage.SetObject(SETTINGS, {
+                darkMode,
+                source: picked,
+            });
+        },
+        [dispatch, darkMode]
     );
 
     const handleSearch = useCallback(
         (result: string) => {
             result = result.trim();
-            if (result) gameSearch(result, browserView, dispatch);
+            if (result) gameSearch(result, browserView, dispatch, source);
             Navigation.OpenQuickAccessMenu(QuickAccessTab.Decky);
         },
-        [browserView, dispatch]
+        [browserView, dispatch, source]
     );
     return useMemo(
         () =>
@@ -207,16 +232,26 @@ export const Nav = () => {
                         checked={darkMode}
                         onChange={handleDarkMode}
                     />
+                    <DropdownItem
+                        label="Guide source"
+                        description="Which sites to search for guides"
+                        disableNavSounds={true}
+                        rgOptions={SOURCE_OPTIONS}
+                        selectedOption={source}
+                        onChange={handleSource}
+                    />
                 </div>
             ),
         [
             pluginState,
             darkMode,
+            source,
             hasToc,
             back,
             backToGames,
             reload,
             handleDarkMode,
+            handleSource,
             handleSearch,
         ]
     );

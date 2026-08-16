@@ -7,14 +7,14 @@ import { List } from './List';
 export const GameList = () => {
     const { state, dispatch, browserView } = useContext(AppContext);
 
+    const { runningGame, games, source } = state;
     const search = useCallback(
         (game: string) => {
-            gameSearch(game, browserView, dispatch);
+            gameSearch(game, browserView, dispatch, source);
         },
-        [browserView, dispatch]
+        [browserView, dispatch, source]
     );
 
-    const { runningGame, games } = state;
     return useMemo(
         () => (
             <>

@@ -42,7 +42,12 @@ const pages: Record<string, () => string> = {
 
 // Neoseeker's quick-search: static JSONP on its CDN, fetched with fetchNoCors
 // (never through the BrowserView). Keyed by the normalised keyword.
-const qsPayloads: Record<string, string> = {};
+const qsPayloads: Record<string, string> = {
+    chrono_trigger:
+        'qs({"keywords":"chrono trigger","timestamp":0,"products":[{"id":1,"name":"Chrono Trigger","url":"\\/\\/www.neoseeker.com\\/chrono-trigger\\/"}],"forums":[]});',
+    dragon_quest_xi:
+        'qs({"keywords":"dragon quest xi","timestamp":0,"products":[{"id":68295,"name":"Dragon Quest XI: Echoes of an Elusive Age","url":"\\/\\/www.neoseeker.com\\/dragon-quest-xi\\/walkthrough","image":null}],"forums":[]});',
+};
 const qsFor = (kw: string) =>
     qsPayloads[kw] ??
     `qs({"keywords":"${kw}","timestamp":0,"products":[],"forums":[]});`;

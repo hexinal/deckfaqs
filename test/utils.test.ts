@@ -5,6 +5,7 @@ import type { BrowserView } from '../src/context/AppContext';
 import {
     ERROR_NO_BROWSER_VIEW,
     cancelPendingRequests,
+    gameSearch,
     getGuideHtml,
     request,
     retryLastRequest,
@@ -240,4 +241,157 @@ describe('getGuideHtml', () => {
         expect(loadUrl.mock.calls[0]?.[0]).toBe(url);
         expect(loadUrl).toHaveBeenCalledTimes(2);
     });
+});
+
+describe('gameSearch', () => {
+    const dispatched: AppActions[] = [];
+    const dispatch = (a: AppActions) => {
+        dispatched.push(a);
+    };
+    const loadUrl = vi.fn();
+    const browserView = { LoadURL: loadUrl } as unknown as BrowserView;
+    const gfPayload = JSON.stringify([
+        { product_name: 'Hades', url: '/pc/256355-hades' },
+    ]);
+    const neoPayload =
+        'qs({"products":[{"name":"Hades","url":"//www.neoseeker.com/hades-2020/walkthrough"}]});';
+    let gfDown = false;
+    let cdnDown = false;
+    const cdnRequests: string[] = [];
+
+    beforeEach(async () => {
+        const { fetchNoCors, executeInTab } = await import('@decky/api');
+        dispatched.length = 0;
+        cdnRequests.length = 0;
+        gfDown = false;
+        cdnDown = false;
+        loadUrl.mockReset();
+        vi.mocked(fetchNoCors).mockReset();
+        vi.mocked(fetchNoCors).mockImplementation((input) => {
+            const url = String(input);
+            if (url.startsWith('http://localhost:8080/json')) {
+                const current = String(loadUrl.mock.lastCall?.[0] ?? '');
+                const tabs = gfDown ? [] : [{ url: current, title: 'tab' }];
+                return Promise.resolve({
+                    ok: true,
+                    json: () => Promise.resolve(tabs),
+                } as Response);
+            }
+            cdnRequests.push(url);
+            if (cdnDown) return Promise.reject(new Error('offline'));
+            return Promise.resolve({
+                ok: true,
+                status: 200,
+                text: () => Promise.resolve(neoPayload),
+            } as Response);
+        });
+        vi.mocked(executeInTab).mockResolvedValue({
+            success: true,
+            result: gfPayload,
+        });
+    });
+
+    const results = () =>
+        vi.waitFor(() => {
+            const last = dispatched[dispatched.length - 1];
+            expect(last?.type).not.toBe(ActionType.UPDATE_PLUGIN_STATE);
+            return last!;
+        });
+
+    it('merges both sites, GameFAQs first, each under its group', async () => {
+        gameSearch('Hades', browserView, dispatch, 'both');
+        expect(dispatched[0]).toEqual({
+            type: ActionType.UPDATE_PLUGIN_STATE,
+            payload: { pluginState: 'results', isLoading: true },
+        });
+        expect(await results()).toEqual({
+            type: ActionType.UPDATE_RESULTS,
+            payload: {
+                term: 'Hades',
+                notice: undefined,
+                results: [
+                    {
+                        text: 'Hades',
+                        url: 'https://gamefaqs.gamespot.com/pc/256355-hades',
+                        group: 'GameFAQs',
+                    },
+                    {
+                        text: 'Hades',
+                        url: 'https://www.neoseeker.com/hades-2020/walkthrough',
+                        group: 'Neoseeker',
+                    },
+                ],
+            },
+        });
+    });
+
+    it('queries only the selected site (no groups)', async () => {
+        gameSearch('Hades', browserView, dispatch, 'gamefaqs');
+        expect(await results()).toMatchObject({
+            payload: {
+                results: [
+                    {
+                        text: 'Hades',
+                        url: 'https://gamefaqs.gamespot.com/pc/256355-hades',
+                    },
+                ],
+            },
+        });
+        expect(cdnRequests).toEqual([]);
+        dispatched.length = 0;
+        loadUrl.mockClear();
+        gameSearch('Hades', browserView, dispatch, 'neoseeker');
+        expect(await results()).toMatchObject({
+            payload: {
+                results: [
+                    {
+                        text: 'Hades',
+                        url: 'https://www.neoseeker.com/hades-2020/walkthrough',
+                    },
+                ],
+            },
+        });
+        expect(loadUrl).not.toHaveBeenCalled();
+    });
+
+    it('keeps the other site and adds a notice when one fails', async () => {
+        cdnDown = true;
+        gameSearch('Hades', browserView, dispatch, 'both');
+        expect(await results()).toEqual({
+            type: ActionType.UPDATE_RESULTS,
+            payload: {
+                term: 'Hades',
+                notice: "Couldn't load Neoseeker. Check the connection and retry.",
+                results: [
+                    {
+                        text: 'Hades',
+                        url: 'https://gamefaqs.gamespot.com/pc/256355-hades',
+                        group: 'GameFAQs',
+                    },
+                ],
+            },
+        });
+    });
+
+    it('reports an error when nothing could be loaded', async () => {
+        cdnDown = true;
+        const { executeInTab } = await import('@decky/api');
+        vi.mocked(executeInTab).mockResolvedValue({
+            success: true,
+            result: '',
+        });
+        gfDown = true;
+        gameSearch('Hades', browserView, dispatch, 'both');
+        await vi.waitFor(
+            () => {
+                expect(dispatched[dispatched.length - 1]?.type).toBe(
+                    ActionType.UPDATE_ERROR
+                );
+            },
+            { timeout: 15_000 }
+        );
+        expect(dispatched[dispatched.length - 1]).toMatchObject({
+            payload: /Couldn't load GameFAQs/,
+        });
+    }, 20_000);
 });

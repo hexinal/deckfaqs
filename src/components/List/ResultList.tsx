@@ -1,14 +1,22 @@
+import { DialogButton } from '@decky/ui';
 import { useCallback, useContext, useMemo } from 'react';
 import { AppContext } from '../../context/AppContext';
 import { ActionType } from '../../reducers/AppReducer';
-import { getContent, request } from '../../utils';
+import { gameSearch, getContent, request } from '../../utils';
 import { getGuidesCode, parseGuideList } from '../../sources/gamefaqs';
 import { guideListUrl } from '../../sources/source';
 import { List } from './List';
 
 export const ResultList = () => {
     const {
-        state: { searchResults },
+        state: {
+            searchResults,
+            searchTerm,
+            searchNotice,
+            source,
+            isLoading,
+            error,
+        },
         dispatch,
         browserView,
     } = useContext(AppContext);
@@ -35,14 +43,41 @@ export const ResultList = () => {
         [browserView, dispatch]
     );
 
+    const retrySearch = useCallback(() => {
+        gameSearch(searchTerm, browserView, dispatch, source);
+    }, [searchTerm, browserView, dispatch, source]);
+
+    const showNotice = Boolean(searchNotice) && !isLoading && !error;
     return useMemo(
         () => (
-            <List
-                header="Search Results"
-                data={searchResults}
-                handleClick={getGuides}
-            ></List>
+            <>
+                {showNotice && (
+                    <div
+                        style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            fontSize: '12px',
+                            marginBottom: '6px',
+                        }}
+                    >
+                        <span style={{ flex: '1 1 auto' }}>{searchNotice}</span>
+                        <DialogButton
+                            disableNavSounds={true}
+                            style={{ flex: '0 0 auto', width: 'auto' }}
+                            onClick={retrySearch}
+                        >
+                            Retry
+                        </DialogButton>
+                    </div>
+                )}
+                <List
+                    header="Search Results"
+                    data={searchResults}
+                    handleClick={getGuides}
+                ></List>
+            </>
         ),
-        [searchResults, getGuides]
+        [searchResults, getGuides, showNotice, searchNotice, retrySearch]
     );
 };
