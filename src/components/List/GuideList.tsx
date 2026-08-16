@@ -3,6 +3,7 @@ import { AppContext } from '../../context/AppContext';
 import { ActionType } from '../../reducers/AppReducer';
 import { List } from './List';
 import { getGuideHtml, request } from '../../utils';
+import { loadPositions } from '../../positions';
 
 export const GuideList = () => {
     const {
@@ -15,20 +16,30 @@ export const GuideList = () => {
         (url: string) => {
             request(
                 { browserView, dispatch },
-                (ctx) => {
+                async (ctx) => {
                     dispatch({
                         type: ActionType.UPDATE_PLUGIN_STATE,
                         payload: { pluginState: 'guide', isLoading: true },
                     });
-                    return getGuideHtml(url, ctx);
+                    // Resume where the user left off: same page of a
+                    // paginated guide, then the saved scroll ratio.
+                    const pos = (await loadPositions())[url];
+                    const page = pos?.page ?? '';
+                    const res = await getGuideHtml(
+                        page ? `${url}/${page}` : url,
+                        ctx
+                    );
+                    return { ...res, page, restore: pos };
                 },
-                ({ html, toc }) => {
+                ({ html, toc, page, restore }) => {
                     dispatch({
                         type: ActionType.UPDATE_GUIDE,
                         payload: {
                             guideHtml: html,
                             guideUrl: url,
                             guideToc: toc,
+                            page,
+                            restore,
                         },
                     });
                 }

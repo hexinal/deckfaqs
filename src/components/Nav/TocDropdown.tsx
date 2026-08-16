@@ -22,7 +22,12 @@ export const TocDropdown = ({ style }: TocDropdownProps) => {
             anchor = path.substring(1);
             dispatch({
                 type: ActionType.UPDATE_GUIDE,
-                payload: { ...currentGuide, anchor, currentTocSection: path },
+                payload: {
+                    ...currentGuide,
+                    anchor,
+                    currentTocSection: path,
+                    restore: undefined,
+                },
             });
         } else {
             request(
@@ -44,7 +49,9 @@ export const TocDropdown = ({ style }: TocDropdownProps) => {
                             ...currentGuide,
                             guideHtml: html,
                             anchor,
+                            page: path.split('#')[0],
                             currentTocSection: path,
+                            restore: undefined,
                         },
                     });
                 }
