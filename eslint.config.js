@@ -30,18 +30,8 @@ export default defineConfig([
             },
         },
         rules: {
-            // Warn-first rollout: these fire on existing code and are tracked
-            // as follow-up cleanups. Flip to 'error' once src/ is clean.
-            '@typescript-eslint/no-explicit-any': 'warn',
-            '@typescript-eslint/ban-ts-comment': 'warn',
+            // React's own recommendation is warn; CI is kept at 0 occurrences.
             'react-hooks/exhaustive-deps': 'warn',
-            'react-hooks/immutability': 'warn',
-            '@typescript-eslint/no-unused-expressions': 'warn',
-            '@typescript-eslint/no-unsafe-function-type': 'warn',
-            'no-useless-escape': 'warn',
-            'no-useless-assignment': 'warn',
-            'no-case-declarations': 'warn',
-            'prefer-const': 'warn',
             // tsc (noUnusedLocals/noUnusedParameters) already enforces this.
             '@typescript-eslint/no-unused-vars': [
                 'error',

@@ -9,7 +9,7 @@ export const MainView = () => {
     const {
         state: { pluginState },
     } = useContext(AppContext);
-    const elementToRender = () => {
+    return useMemo(() => {
         switch (pluginState) {
             case 'games':
                 return <GameList />;
@@ -20,7 +20,5 @@ export const MainView = () => {
             case 'guide':
                 return <Guide />;
         }
-    };
-
-    return useMemo(() => elementToRender(), [pluginState]);
+    }, [pluginState]);
 };

@@ -7,7 +7,7 @@ import {
     QuickAccessTab,
     Navigation,
 } from '@decky/ui';
-import { useContext, useMemo } from 'react';
+import { useCallback, useContext, useMemo } from 'react';
 import { BsArrowsFullscreen } from 'react-icons/bs';
 import { FaHome } from 'react-icons/fa';
 import { FiRotateCw } from 'react-icons/fi';
@@ -18,56 +18,64 @@ import { Search } from './Search';
 import { SearchModal } from './SearchModal';
 import { TocDropdown } from './TocDropdown';
 
+const btnStyle = {
+    maxWidth: '30%',
+    flexGrow: 1,
+    minWidth: 0,
+};
+
 export const Nav = () => {
     const {
         state: { pluginState, currentGuide, darkMode },
         dispatch,
         browserView,
     } = useContext(AppContext);
+    const guideUrl = currentGuide?.guideUrl;
+    const hasToc = (currentGuide?.guideToc?.length ?? 0) > 0;
 
-    const back = () => {
+    const back = useCallback(() => {
         dispatch({ type: ActionType.BACK });
-    };
+    }, [dispatch]);
 
-    const reload = () => {
-        if (currentGuide?.guideUrl) {
+    const reload = useCallback(() => {
+        if (guideUrl) {
             dispatch({ type: ActionType.UPDATE_LOADING, payload: true });
             getGuideHtml(
-                currentGuide.guideUrl,
+                guideUrl,
                 browserView,
                 (result: string, toc: Array<TableOfContentEntry>) => {
                     dispatch({
                         type: ActionType.UPDATE_GUIDE,
                         payload: {
                             guideHtml: result,
-                            guideUrl: currentGuide?.guideUrl,
+                            guideUrl,
                             guideToc: toc,
                         },
                     });
                 }
             );
         }
-    };
+    }, [guideUrl, browserView, dispatch]);
 
-    const backToGames = () => {
+    const backToGames = useCallback(() => {
         dispatch({ type: ActionType.BACK_TO_STATE, payload: 'games' });
-    };
+    }, [dispatch]);
 
-    const handleDarkMode = (result: boolean) => {
-        dispatch({ type: ActionType.UPDATE_DARK_MODE, payload: result });
-    };
+    const handleDarkMode = useCallback(
+        (result: boolean) => {
+            dispatch({ type: ActionType.UPDATE_DARK_MODE, payload: result });
+        },
+        [dispatch]
+    );
 
-    const handleSearch = (result: string) => {
-        result = result.trim();
-        result && gameSearch(result, browserView, dispatch);
-        Navigation.OpenQuickAccessMenu(QuickAccessTab.Decky);
-    };
-
-    const btnStyle = {
-        maxWidth: '30%',
-        flexGrow: 1,
-        minWidth: 0,
-    };
+    const handleSearch = useCallback(
+        (result: string) => {
+            result = result.trim();
+            if (result) gameSearch(result, browserView, dispatch);
+            Navigation.OpenQuickAccessMenu(QuickAccessTab.Decky);
+        },
+        [browserView, dispatch]
+    );
     return useMemo(
         () =>
             pluginState !== 'games' ? (
@@ -82,7 +90,6 @@ export const Nav = () => {
                     >
                         {pluginState !== 'results' && (
                             <DialogButton
-                                //@ts-ignore
                                 disableNavSounds={true}
                                 style={{
                                     ...btnStyle,
@@ -101,7 +108,6 @@ export const Nav = () => {
                         )}
                         {pluginState === 'guide' && (
                             <DialogButton
-                                //@ts-ignore
                                 disableNavSounds={true}
                                 style={btnStyle}
                                 onClick={reload}
@@ -115,7 +121,6 @@ export const Nav = () => {
                             </DialogButton>
                         )}
                         <DialogButton
-                            //@ts-ignore
                             disableNavSounds={true}
                             style={btnStyle}
                             onClick={back}
@@ -132,7 +137,6 @@ export const Nav = () => {
                             }}
                         >
                             <DialogButton
-                                //@ts-ignore
                                 disableNavSounds={true}
                                 style={{
                                     ...btnStyle,
@@ -152,8 +156,7 @@ export const Nav = () => {
                             >
                                 <BsArrowsFullscreen />
                             </DialogButton>
-                            {currentGuide &&
-                            currentGuide.guideToc!.length > 0 ? (
+                            {hasToc ? (
                                 <TocDropdown
                                     style={{ ...btnStyle, minWidth: '160px' }}
                                 />
@@ -166,7 +169,6 @@ export const Nav = () => {
             ) : (
                 <div style={{ flex: '0 1 auto', padding: '0 10px' }}>
                     <DialogButton
-                        //@ts-ignore
                         disableNavSounds={true}
                         style={{
                             marginBottom: '10px',
@@ -191,6 +193,15 @@ export const Nav = () => {
                     />
                 </div>
             ),
-        [pluginState, darkMode, currentGuide?.guideToc]
+        [
+            pluginState,
+            darkMode,
+            hasToc,
+            back,
+            backToGames,
+            reload,
+            handleDarkMode,
+            handleSearch,
+        ]
     );
 };

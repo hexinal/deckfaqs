@@ -3,6 +3,7 @@ import DOMPurify from 'dompurify';
 import type { Dispatch } from 'react';
 import { SearchResult } from './components/List/GameList';
 import { ListItem } from './components/List/List';
+import type { BrowserView, TableOfContentEntry } from './context/AppContext';
 import { ActionType, AppActions } from './reducers/AppReducer';
 
 const getGuideCode = `function parseList(list) {
@@ -85,10 +86,14 @@ const runInTab = async (title: string, code: string): Promise<string> => {
 // Loads `url` in the hidden BrowserView, waits for its tab to appear, then runs `code` in it.
 const scrapeUrl = async (
     url: string,
-    browserView: any,
+    browserView: BrowserView | undefined,
     code: string
 ): Promise<string> => {
     let result = '';
+    if (!browserView) {
+        console.warn('[DeckFAQs] no BrowserView available');
+        return result;
+    }
     // CEF reports the loaded URL percent-encoded (including apostrophes);
     // don't re-encode URLs that already contain escapes.
     const alreadyEncoded = /%[0-9a-f]{2}/i.test(url);
@@ -109,9 +114,9 @@ const scrapeUrl = async (
 
 export const getContent = async (
     url: string,
-    browserView: any,
+    browserView: BrowserView | undefined,
     code: string,
-    handleResult: Function
+    handleResult: (result: string) => void
 ) => {
     const htmlResult = await scrapeUrl(url, browserView, code);
     handleResult(htmlResult);
@@ -119,11 +124,11 @@ export const getContent = async (
 
 export const getGuideHtml = async (
     url: string,
-    browserView: any,
-    handleResult: Function
+    browserView: BrowserView | undefined,
+    handleResult: (result: string, toc: TableOfContentEntry[]) => void
 ) => {
     let htmlResult = '';
-    let toc = '';
+    let toc: TableOfContentEntry[] = [];
     const raw = await scrapeUrl(url, browserView, getGuideCode);
     if (raw) {
         try {
@@ -139,7 +144,7 @@ export const getGuideHtml = async (
 
 export const gameSearch = async (
     game: string,
-    browserView: any,
+    browserView: BrowserView | undefined,
     dispatch: Dispatch<AppActions>
 ) => {
     game = game.trim().replace(/\s+/g, '+');
@@ -166,7 +171,7 @@ export const gameSearch = async (
         }
     get_games()`,
         (result: string) => {
-            let searchResults: ListItem[] = [];
+            const searchResults: ListItem[] = [];
             let results: SearchResult[] = [];
             try {
                 if (result) results = JSON.parse(result);

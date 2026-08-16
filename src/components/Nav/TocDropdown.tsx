@@ -1,4 +1,4 @@
-import { Dropdown } from '@decky/ui';
+import { Dropdown, type SingleDropdownOption } from '@decky/ui';
 import { useContext, type CSSProperties } from 'react';
 import { AppContext } from '../../context/AppContext';
 import { ActionType } from '../../reducers/AppReducer';
@@ -14,7 +14,7 @@ export const TocDropdown = ({ style }: TocDropdownProps) => {
         dispatch,
         browserView,
     } = useContext(AppContext);
-    const handleTOCChange = (data: any) => {
+    const handleTOCChange = (data: SingleDropdownOption) => {
         const path: string = data.data;
         let anchor: string | undefined = undefined;
         const href = `${currentGuide?.guideUrl}/${path}`;
@@ -45,7 +45,6 @@ export const TocDropdown = ({ style }: TocDropdownProps) => {
     return (
         <div style={style}>
             <Dropdown
-                //@ts-ignore
                 disableNavSounds={true}
                 rgOptions={currentGuide?.guideToc ?? []}
                 strDefaultLabel="TOC"

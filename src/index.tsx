@@ -6,7 +6,6 @@ import { AppContextProvider } from './context/AppContext';
 
 export default definePlugin(() => {
     const windowRouter = Router.WindowStore?.GamepadUIMainWindowInstance;
-    // @ts-ignore CreateBrowserView is not declared on @decky/ui's WindowRouter type
     const browserView = windowRouter?.CreateBrowserView('DeckFAQs');
     return {
         name: 'DeckFAQs',
@@ -18,7 +17,7 @@ export default definePlugin(() => {
         ),
         icon: <FaSearch />,
         onDismount() {
-            SteamClient.BrowserView.Destroy(browserView);
+            if (browserView) SteamClient.BrowserView.Destroy(browserView);
             routerHook.removeRoute('/deckfaqs-fullscreen');
         },
         alwaysRender: true,

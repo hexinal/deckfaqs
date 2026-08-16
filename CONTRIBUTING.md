@@ -44,6 +44,6 @@ Dependency updates: Dependabot only opens **security** PRs here (`.github/depend
 ## Pull requests
 
 - Branch off `main`, open a PR against `main`. CI runs format check, ESLint, type-check, build and packaging; the built zip is available as a workflow artifact. Merging requires those checks to be green.
-- ESLint (`eslint.config.js`: `@eslint/js` + `typescript-eslint` recommended + `react-hooks`, prettier-compatible) currently runs _warn-first_: rules that fire on the existing code (`no-explicit-any`, `ban-ts-comment`, `prefer-const`, …) are warnings until the code is cleaned up. Don't add new warnings; fixing existing ones is welcome.
+- ESLint (`eslint.config.js`: `@eslint/js` + `typescript-eslint` recommended + `react-hooks`, prettier-compatible) must pass with zero warnings (`pnpm lint`). Props/APIs the Steam client has but `@decky/ui` doesn't declare go into `src/decky-ui.d.ts` instead of `@ts-ignore`.
 - Keep the code style: 4-space indent, single quotes, es5 trailing commas (`.prettierrc.json`, `.editorconfig`); CSS modules don't work under Decky's router, so styling is inline.
 - When GameFAQs markup changes, the extraction scripts in `src/utils.ts` (`getGuideCode`), `src/components/ResultList.tsx` and `faqsNightmareRegex` in `src/constants.ts` are the usual suspects.
