@@ -27,7 +27,12 @@ export const SearchModal = ({
     }, []);
     return (
         <ModalRoot closeModal={handleSubmit}>
-            <form>
+            <form
+                onSubmit={(e) => {
+                    e.preventDefault();
+                    handleSubmit();
+                }}
+            >
                 <TextField
                     ref={textField}
                     focusOnMount={true}
