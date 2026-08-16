@@ -1,0 +1,56 @@
+name: Bug report
+description: Something in DeckFAQs is broken or crashes.
+labels: [bug]
+body:
+    - type: markdown
+      attributes:
+          value: |
+              Thanks for the report! Note that this is a **fork** of hulkrelax/deckfaqs — make sure you installed it from this repository's releases, not the (outdated) Decky store version.
+    - type: input
+      id: plugin-version
+      attributes:
+          label: DeckFAQs version
+          description: Shown in Decky's plugin list, or the release you downloaded.
+          placeholder: e.g. 2.0.1
+      validations:
+          required: true
+    - type: input
+      id: decky-version
+      attributes:
+          label: Decky Loader version
+          description: Decky settings → General → About.
+          placeholder: e.g. v3.1.6
+      validations:
+          required: true
+    - type: dropdown
+      id: steam-channel
+      attributes:
+          label: Steam client update channel
+          options:
+              - Stable
+              - Beta
+              - Preview
+      validations:
+          required: true
+    - type: textarea
+      id: what-happened
+      attributes:
+          label: What happened?
+          description: What did you do, what did you expect, what happened instead?
+      validations:
+          required: true
+    - type: textarea
+      id: steps
+      attributes:
+          label: Steps to reproduce
+          placeholder: |
+              1. Open the Quick Access Menu → DeckFAQs
+              2. Select game "..."
+              3. Open guide "..." (GameFAQs URL if you have it)
+      validations:
+          required: true
+    - type: textarea
+      id: logs
+      attributes:
+          label: Logs / screenshots
+          description: Decky logs (`/home/deck/homebrew/logs/`) or a CEF console excerpt, and screenshots if relevant.

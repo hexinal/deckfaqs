@@ -1,5 +1,7 @@
 # DeckFAQs (fork)
 
+[![Build and Release](https://github.com/hexinal/deckfaqs/actions/workflows/build.yml/badge.svg)](https://github.com/hexinal/deckfaqs/actions/workflows/build.yml) [![Latest release](https://img.shields.io/github/v/release/hexinal/deckfaqs)](https://github.com/hexinal/deckfaqs/releases/latest)
+
 > **This is a community-maintained fork of [hulkrelax/deckfaqs](https://github.com/hulkrelax/deckfaqs).** The original project has not been updated since 2023 and no longer works with current Decky Loader; this fork ports it to the current Decky plugin API and keeps it working. All credit for the original plugin goes to [hulkrelax](https://github.com/hulkrelax).
 
 ## Description
@@ -26,7 +28,8 @@ The version on the Decky store (1.8.x) is the old upstream release and no longer
 ## Development
 
 - `pnpm install`, then `pnpm build` (or `task build`) bundles `src/index.tsx` into `dist/index.js`.
-- `task package` builds and zips the plugin into `deckfaqs.zip`, ready to install as above.
+- `pnpm package` / `task package` builds and zips the plugin into `deckfaqs.zip`, ready to install as above.
+- Releases are cut automatically from [Conventional Commits](https://www.conventionalcommits.org) on `main` — see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Features
 
@@ -68,6 +71,6 @@ DeckFAQs supports both rich-text and plain-text guides from GameFAQs.
 
 ## Known Issues
 
--   It is possible that some non-game games (thins like Chrome) will show up in your list of games. I have a filter to remove some obvious non-games but the list is non-exhaustive. We can always expand the filter to remove them over time. In any case, it doesn't really break anything as far as I know and hopefully you have more games than non-games :smile:
+- It is possible that some non-game games (thins like Chrome) will show up in your list of games. I have a filter to remove some obvious non-games but the list is non-exhaustive. We can always expand the filter to remove them over time. In any case, it doesn't really break anything as far as I know and hopefully you have more games than non-games :smile:
 
-Report issues or feature requests [here](https://github.com/hulkrelax/deckfaqs/issues).
+Report issues or feature requests [here](https://github.com/hexinal/deckfaqs/issues).
