@@ -31,7 +31,9 @@ describe('getGuidesCode (game /faqs page)', () => {
             date: '05/06/2014',
         });
         // Maps live under /map/ and are not guides.
-        expect(entries.every((e) => /\/faqs\/\d+/.test(e.href))).toBe(true);
+        expect(entries.every((e) => /\/faqs\/\d+/.test(e.href ?? ''))).toBe(
+            true
+        );
         // Version-less entries still carry a date.
         const noVersion = entries.find((e) => e.version === '');
         expect(noVersion).toMatchObject({ date: '03/14/2002' });
@@ -70,7 +72,7 @@ describe('getGuideCode (guide page)', () => {
             { data: '#intro', label: 'Intro' },
             { data: '#walk', label: 'Walkthrough' },
             {
-                label: expect.stringContaining('Chapter 1'),
+                label: expect.stringContaining('Chapter 1') as string,
                 options: [
                     { data: '#c1a', label: 'Part A' },
                     { data: '/ps2/1-x/faqs/2?page=1#c1b', label: 'Part B' },

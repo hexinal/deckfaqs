@@ -4,7 +4,7 @@ import {
     DialogFooter,
     Focusable,
     ModalRoot,
-    ModalRootProps,
+    type ModalRootProps,
     TextField,
 } from '@decky/ui';
 import {
@@ -16,22 +16,19 @@ import {
 } from 'react';
 
 type MyProps = ModalRootProps & {
-    setModalResult?(result: string): void;
+    setModalResult?: (result: string) => void;
     promptText: string;
 };
 
-export const SearchModal = ({
-    closeModal,
-    setModalResult,
-    promptText,
-}: MyProps) => {
+export const SearchModal = (props: MyProps) => {
+    const { setModalResult, promptText } = props;
     const [searchText, setSearchText] = useState('');
     const handleText = (e: ChangeEvent<HTMLInputElement>) => {
         setSearchText(e.target.value);
     };
     const handleSubmit = () => {
         setModalResult?.(searchText);
-        closeModal?.();
+        props.closeModal?.();
     };
     // Steam's TextField swallows the default Enter action, so a <form> never
     // submits; listen for the key ourselves and also offer an explicit button.

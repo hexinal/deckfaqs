@@ -1,25 +1,26 @@
-import { ListItem } from '../components/List/List';
-import {
+import type { ListItem } from '../components/List/List';
+import type {
     GuideContents,
     GuideSearch,
     PluginState,
     TAppState,
 } from '../context/AppContext';
 
-export enum ActionType {
-    UPDATE_PLUGIN_STATE,
-    UPDATE_RESULTS,
-    UPDATE_GAMES,
-    UPDATE_GUIDES,
-    UPDATE_RUNNING_GAME,
-    UPDATE_GUIDE,
-    BACK,
-    BACK_TO_STATE,
-    UPDATE_DARK_MODE,
-    UPDATE_LOADING,
-    UPDATE_SEARCH,
-    UPDATE_ERROR,
-}
+export const ActionType = {
+    UPDATE_PLUGIN_STATE: 'UPDATE_PLUGIN_STATE',
+    UPDATE_RESULTS: 'UPDATE_RESULTS',
+    UPDATE_GAMES: 'UPDATE_GAMES',
+    UPDATE_GUIDES: 'UPDATE_GUIDES',
+    UPDATE_RUNNING_GAME: 'UPDATE_RUNNING_GAME',
+    UPDATE_GUIDE: 'UPDATE_GUIDE',
+    BACK: 'BACK',
+    BACK_TO_STATE: 'BACK_TO_STATE',
+    UPDATE_DARK_MODE: 'UPDATE_DARK_MODE',
+    UPDATE_LOADING: 'UPDATE_LOADING',
+    UPDATE_SEARCH: 'UPDATE_SEARCH',
+    UPDATE_ERROR: 'UPDATE_ERROR',
+} as const;
+export type ActionType = (typeof ActionType)[keyof typeof ActionType];
 
 export type AppActions =
     | UpdatePluginStateAction
@@ -37,17 +38,17 @@ export type AppActions =
 
 /** A user-facing fetch error; cleared by the next navigation/result. */
 export type UpdateErrorAction = {
-    type: ActionType.UPDATE_ERROR;
+    type: typeof ActionType.UPDATE_ERROR;
     payload: string;
 };
 
 export type UpdateSearchAction = {
-    type: ActionType.UPDATE_SEARCH;
+    type: typeof ActionType.UPDATE_SEARCH;
     payload: GuideSearch;
 };
 
 export type UpdateLoadingAction = {
-    type: ActionType.UPDATE_LOADING;
+    type: typeof ActionType.UPDATE_LOADING;
     payload: boolean;
 };
 
@@ -57,45 +58,45 @@ type UpdatePluginState = {
 };
 
 export type UpdatePluginStateAction = {
-    type: ActionType.UPDATE_PLUGIN_STATE;
+    type: typeof ActionType.UPDATE_PLUGIN_STATE;
     payload: UpdatePluginState;
 };
 
 export type UpdateResultsAction = {
-    type: ActionType.UPDATE_RESULTS;
+    type: typeof ActionType.UPDATE_RESULTS;
     payload: ListItem[];
 };
 
 export type UpdateGamesAction = {
-    type: ActionType.UPDATE_GAMES;
+    type: typeof ActionType.UPDATE_GAMES;
     payload: { games: ListItem[]; runningGame?: string };
 };
 
 export type UpdateGuidesAction = {
-    type: ActionType.UPDATE_GUIDES;
+    type: typeof ActionType.UPDATE_GUIDES;
     payload: ListItem[];
 };
 
 export type UpdateRunningGameAction = {
-    type: ActionType.UPDATE_RUNNING_GAME;
+    type: typeof ActionType.UPDATE_RUNNING_GAME;
     payload?: string;
 };
 
 export type UpdateGuideAction = {
-    type: ActionType.UPDATE_GUIDE;
+    type: typeof ActionType.UPDATE_GUIDE;
     payload: GuideContents;
 };
 
 export type BackAction = {
-    type: ActionType.BACK;
+    type: typeof ActionType.BACK;
 };
 
 export type BackToStateAction = {
-    type: ActionType.BACK_TO_STATE;
+    type: typeof ActionType.BACK_TO_STATE;
     payload: PluginState;
 };
 export type UpdateDarkModeAction = {
-    type: ActionType.UPDATE_DARK_MODE;
+    type: typeof ActionType.UPDATE_DARK_MODE;
     payload: boolean;
 };
 
