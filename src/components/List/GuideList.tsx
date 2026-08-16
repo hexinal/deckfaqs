@@ -1,8 +1,8 @@
 import { useCallback, useContext, useMemo } from 'react';
-import { AppContext, TableOfContentEntry } from '../../context/AppContext';
+import { AppContext } from '../../context/AppContext';
 import { ActionType } from '../../reducers/AppReducer';
 import { List } from './List';
-import { getGuideHtml } from '../../utils';
+import { getGuideHtml, request } from '../../utils';
 
 export const GuideList = () => {
     const {
@@ -13,18 +13,20 @@ export const GuideList = () => {
 
     const openGuide = useCallback(
         (url: string) => {
-            dispatch({
-                type: ActionType.UPDATE_PLUGIN_STATE,
-                payload: { pluginState: 'guide', isLoading: true },
-            });
-            getGuideHtml(
-                url,
-                browserView,
-                (result: string, toc: Array<TableOfContentEntry>) => {
+            request(
+                { browserView, dispatch },
+                (ctx) => {
+                    dispatch({
+                        type: ActionType.UPDATE_PLUGIN_STATE,
+                        payload: { pluginState: 'guide', isLoading: true },
+                    });
+                    return getGuideHtml(url, ctx);
+                },
+                ({ html, toc }) => {
                     dispatch({
                         type: ActionType.UPDATE_GUIDE,
                         payload: {
-                            guideHtml: result,
+                            guideHtml: html,
                             guideUrl: url,
                             guideToc: toc,
                         },

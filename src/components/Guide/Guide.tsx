@@ -19,11 +19,12 @@ import parse, {
     type DOMNode,
 } from 'html-react-parser';
 import { ActionType } from '../../reducers/AppReducer';
-import { getGuideHtml } from '../../utils';
+import { getGuideHtml, request } from '../../utils';
 import { GAMEFAQS_ORIGIN } from '../../constants';
 import { TocDropdown } from '../Nav/TocDropdown';
 import { Search } from '../Nav/Search';
 import { ScrollPanel } from '../ScrollPanel';
+import { ErrorMessage } from '../ErrorMessage';
 import Mark from './mark';
 
 type GuideProps = {
@@ -32,7 +33,7 @@ type GuideProps = {
 
 export const Guide = ({ fullscreen }: GuideProps) => {
     const { state, dispatch, browserView } = useContext(AppContext);
-    const { currentGuide, search, isLoading } = state;
+    const { currentGuide, search, isLoading, error } = state;
     const guideDiv = useRef<HTMLDivElement>(null);
     const stateRef = useRef(state);
 
@@ -85,10 +86,19 @@ export const Guide = ({ fullscreen }: GuideProps) => {
                                     e.preventDefault();
                                     const baseUrl =
                                         currentGuide?.guideUrl ?? '';
-                                    getGuideHtml(
-                                        `${baseUrl}/${anchor}`,
-                                        browserView,
-                                        (result: string) => {
+                                    request(
+                                        { browserView, dispatch },
+                                        (ctx) => {
+                                            dispatch({
+                                                type: ActionType.UPDATE_LOADING,
+                                                payload: true,
+                                            });
+                                            return getGuideHtml(
+                                                `${baseUrl}/${anchor}`,
+                                                ctx
+                                            );
+                                        },
+                                        ({ html }) => {
                                             if (anchor.indexOf('#') > 0) {
                                                 anchor = anchor.substring(
                                                     anchor.indexOf('#') + 1
@@ -100,7 +110,7 @@ export const Guide = ({ fullscreen }: GuideProps) => {
                                                 type: ActionType.UPDATE_GUIDE,
                                                 payload: {
                                                     ...currentGuide,
-                                                    guideHtml: result,
+                                                    guideHtml: html,
                                                     anchor,
                                                 },
                                             });
@@ -168,15 +178,15 @@ export const Guide = ({ fullscreen }: GuideProps) => {
                 } else {
                     const guide = stateRef.current.currentGuide;
                     const baseUrl = guide?.guideUrl ?? '';
-                    getGuideHtml(
-                        `${baseUrl}/#${anchor}`,
-                        browserView,
-                        (result: string) => {
+                    request(
+                        { browserView, dispatch },
+                        (ctx) => getGuideHtml(`${baseUrl}/#${anchor}`, ctx),
+                        ({ html }) => {
                             dispatch({
                                 type: ActionType.UPDATE_GUIDE,
                                 payload: {
                                     ...guide,
-                                    guideHtml: result,
+                                    guideHtml: html,
                                     anchor,
                                 },
                             });
@@ -258,7 +268,9 @@ export const Guide = ({ fullscreen }: GuideProps) => {
     }, []);
     return useMemo(
         () =>
-            isLoading ? (
+            error ? (
+                <ErrorMessage />
+            ) : isLoading ? (
                 <div className="lds-ring">
                     <div></div>
                     <div></div>
@@ -657,7 +669,7 @@ export const Guide = ({ fullscreen }: GuideProps) => {
                     </ScrollPanel>
                 </>
             ),
-        [currentGuide, isLoading, fullscreen, options, state.darkMode]
+        [currentGuide, isLoading, error, fullscreen, options, state.darkMode]
     );
 };
 
