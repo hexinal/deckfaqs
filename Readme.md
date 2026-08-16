@@ -1,4 +1,6 @@
-# DeckFAQs
+# DeckFAQs (fork)
+
+> **This is a community-maintained fork of [hulkrelax/deckfaqs](https://github.com/hulkrelax/deckfaqs).** The original project has not been updated since 2023 and no longer works with current Decky Loader; this fork ports it to the current Decky plugin API and keeps it working. All credit for the original plugin goes to [hulkrelax](https://github.com/hulkrelax).
 
 ## Description
 
@@ -6,7 +8,11 @@ A GameFAQs browser for the Steam Deck. This plugin supports both Steam and non-S
 
 Built with [Decky Loader](https://github.com/SteamDeckHomebrew/decky-loader).
 
-> This is a maintained fork of the original (now abandoned) [hulkrelax/deckfaqs](https://github.com/hulkrelax/deckfaqs), updated for the current Decky Loader plugin API (v2.0.0+ requires Decky Loader v3 or newer).
+## About this fork
+
+- Migrated from the legacy `decky-frontend-lib` / `ServerAPI` stack to `@decky/api` + `@decky/ui` (`api_version` 1, ESM bundle). Requires **Decky Loader v3 or newer**.
+- Fixes for current Steam clients (guide view crash, cramped guide layout in the Quick Access Menu, search robustness).
+- Not (yet) published on the Decky store — install from the releases of this repository, see below.
 
 ## How to Install
 
