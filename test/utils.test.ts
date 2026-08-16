@@ -12,7 +12,11 @@ import {
     toCefTabUrl,
 } from '../src/utils';
 import { parseGuideList, parseSearchResults } from '../src/sources/gamefaqs';
-import { badPayloadError, isAllowedScrapeUrl } from '../src/sources/source';
+import {
+    badPayloadError,
+    isAllowedScrapeUrl,
+    notFoundError,
+} from '../src/sources/source';
 
 const ERROR_BAD_PAYLOAD = badPayloadError('gamefaqs');
 
@@ -294,6 +298,23 @@ describe('getGuideHtml', () => {
         await getGuideHtml(url, { browserView, cancelled: () => false });
         const code = vi.mocked(executeInTab).mock.lastCall?.[2] ?? '';
         expect(code).toContain('get_neo_guide');
+    });
+    it('reports a missing Neoseeker page as such', async () => {
+        const { fetchNoCors, executeInTab } = await import('@decky/api');
+        const url = 'https://www.neoseeker.com/elden-ring/Gone';
+        vi.mocked(fetchNoCors).mockResolvedValue({
+            ok: true,
+            json: () =>
+                Promise.resolve([{ url, title: 'Neoseeker - Error 404' }]),
+        } as Response);
+        vi.mocked(executeInTab).mockResolvedValue({
+            success: true,
+            result: JSON.stringify({ notFound: true }),
+        });
+        const browserView = { LoadURL: vi.fn() } as unknown as BrowserView;
+        await expect(
+            getGuideHtml(url, { browserView, cancelled: () => false })
+        ).rejects.toThrow(notFoundError('neoseeker'));
     });
     it('renders Neoseeker map images without loading anything', async () => {
         const loadUrl = vi.fn();

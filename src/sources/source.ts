@@ -136,5 +136,7 @@ export const tocSectionFor = (
 
 export const unreachableError = (source: Source): string =>
     `Couldn't load ${SOURCE_LABEL[source]}. Check the connection and retry.`;
+export const notFoundError = (source: Source): string =>
+    `${SOURCE_LABEL[source]} has no page at this address (it may have moved). Go back and open the guide again.`;
 export const badPayloadError = (source: Source): string =>
     `${SOURCE_LABEL[source]} returned something unexpected. Retry, or update DeckFAQs if it keeps happening.`;

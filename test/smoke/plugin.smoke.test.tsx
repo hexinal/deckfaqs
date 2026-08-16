@@ -380,6 +380,31 @@ describe('DeckFAQs bundle', () => {
         }
     });
 
+    it('lists just the walkthrough for a Neoseeker game whose /faqs/ page is a 404', async () => {
+        openPanel();
+        await screen.findByText('Installed Games');
+        clickButton(/search games/i);
+        const input = await screen.findByLabelText('search');
+        fireEvent.change(input, { target: { value: 'ELDEN RING' } });
+        fireEvent.keyDown(input, { key: 'Enter' });
+        await screen.findByText('Search Results');
+        clickButton(/^Elden Ring$/);
+        await screen.findByText('Guides');
+        const walkthrough = await screen.findByRole('button', {
+            name: /^Walkthrough$/,
+        });
+        expect(cef.loadUrl).toHaveBeenCalledWith(
+            'https://www.neoseeker.com/elden-ring/faqs/'
+        );
+        fireEvent.click(walkthrough);
+        await waitFor(() =>
+            expect(document.querySelector('#faqwrap.neo-wiki')).not.toBeNull()
+        );
+        expect(cef.loadUrl).toHaveBeenCalledWith(
+            'https://www.neoseeker.com/elden-ring/walkthrough'
+        );
+    });
+
     it('renders Neoseeker HTML and text FAQs and map images', async () => {
         openPanel();
         await openNeoGuideList();

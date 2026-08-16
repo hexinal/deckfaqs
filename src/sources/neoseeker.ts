@@ -152,8 +152,11 @@ export const neoGameSearch = async (
 // Contract: undefined while the page (or Cloudflare's check) is still loading
 // — the footer is the last element of a real page — else a JSON array of
 // {kind, href, title, category, platform, author, date, size, version}.
+// Games without user-submitted FAQs have no /faqs/ page at all (404) even
+// when they have a wiki walkthrough: that counts as an empty list.
 // ---------------------------------------------------------------------------
 export const neoGuidesCode = `function get_neo_guides() {
+    if (/^Neoseeker - Error 404/.test(document.title)) return '[]';
     if (!document.getElementById('footer')) return undefined;
     const clean = (s) => (s || '').replace(/\\s+/g, ' ').trim();
     const out = [];
@@ -299,9 +302,10 @@ export const parseNeoGuideList = (raw: string, gameUrl: string): ListItem[] => {
 // renderer (mark.js root, scroll target, .ffaq CSS) needs no site branches.
 // Links that would leave the guide are unwrapped to plain text; same-guide
 // wiki links stay absolute. Contract: undefined until the footer exists,
-// else JSON {guide, toc}.
+// else JSON {guide, toc}, or {notFound: true} for the site's 404 page.
 // ---------------------------------------------------------------------------
 export const neoGuideCode = `function get_neo_guide() {
+    if (/^Neoseeker - Error 404/.test(document.title)) return JSON.stringify({ notFound: true });
     if (!document.getElementById('footer')) return undefined;
     const clean = (s) => (s || '').replace(/\\s+/g, ' ').trim();
     const esc = (s) =>

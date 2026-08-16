@@ -18,6 +18,7 @@ import {
 import {
     badPayloadError,
     isAllowedScrapeUrl,
+    notFoundError,
     SOURCE_LABEL,
     sourceOf,
     unreachableError,
@@ -205,18 +206,18 @@ export const getGuideHtml = async (
     const code = sourceOf(url) === 'neoseeker' ? neoGuideCode : getGuideCode;
     const raw = await scrapeUrl(url, ctx, code);
     if (!raw) return { html: '', toc: [] };
+    let body: { guide?: string; toc?: unknown; notFound?: boolean };
     try {
-        const body = JSON.parse(raw) as { guide?: string; toc?: unknown };
-        return {
-            html: sanitizeGuideHtml(body.guide ?? ''),
-            toc: Array.isArray(body.toc)
-                ? (body.toc as TableOfContentEntry[])
-                : [],
-        };
+        body = JSON.parse(raw) as typeof body;
     } catch (e) {
         console.error('[DeckFAQs] failed to parse guide payload', e);
         throw new Error(badPayloadError(sourceOf(url)), { cause: e });
     }
+    if (body.notFound) throw new Error(notFoundError(sourceOf(url)));
+    return {
+        html: sanitizeGuideHtml(body.guide ?? ''),
+        toc: Array.isArray(body.toc) ? (body.toc as TableOfContentEntry[]) : [],
+    };
 };
 
 export type SearchOutcome = {

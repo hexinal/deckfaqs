@@ -50,6 +50,11 @@ const pages: Record<string, () => string> = {
         fixture('neoseeker/faq-html-dqxi-bestiary.html'),
     'www.neoseeker.com/chrono-trigger/faqs/131223-o.html': () =>
         fixture('neoseeker/faq-text-chrono-trigger.html'),
+    // Elden Ring: wiki walkthrough, but no user FAQs, so /faqs/ is a 404.
+    'www.neoseeker.com/elden-ring/faqs': () =>
+        fixture('neoseeker/not-found.html'),
+    'www.neoseeker.com/elden-ring/walkthrough': () =>
+        fixture('neoseeker/walkthrough-dragon-quest-xi.html'),
 };
 
 // Neoseeker's quick-search: static JSONP on its CDN, fetched with fetchNoCors
@@ -57,6 +62,8 @@ const pages: Record<string, () => string> = {
 const qsPayloads: Record<string, string> = {
     chrono_trigger:
         'qs({"keywords":"chrono trigger","timestamp":0,"products":[{"id":1,"name":"Chrono Trigger","url":"\\/\\/www.neoseeker.com\\/chrono-trigger\\/"}],"forums":[]});',
+    elden_ring:
+        'qs({"keywords":"elden ring","timestamp":0,"products":[{"id":76523,"name":"Elden Ring","url":"\\/\\/www.neoseeker.com\\/elden-ring\\/walkthrough","image":null}],"forums":[]});',
     dragon_quest_xi:
         'qs({"keywords":"dragon quest xi","timestamp":0,"products":[{"id":68295,"name":"Dragon Quest XI: Echoes of an Elusive Age","url":"\\/\\/www.neoseeker.com\\/dragon-quest-xi\\/walkthrough","image":null}],"forums":[]});',
 };

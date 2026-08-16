@@ -179,6 +179,12 @@ describe('neoGuidesCode (Neoseeker /<slug>/faqs/ page)', () => {
         expect(new Set(entries.map((e) => e.category)).size).toBeGreaterThan(5);
     });
 
+    it('treats the site 404 page (games without user FAQs) as an empty list', () => {
+        expect(
+            runInPage(neoGuidesCode, fixture('neoseeker/not-found.html'))
+        ).toBe('[]');
+    });
+
     it('keeps polling until the page is complete, then reports empty lists', () => {
         expect(
             runInPage(neoGuidesCode, '<html><body><h1>FAQs</h1></body></html>')
@@ -379,6 +385,17 @@ describe('neoGuideCode (Neoseeker wiki and FAQ pages)', () => {
                 ],
             },
         ]);
+    });
+
+    it('reports the site 404 page instead of polling', () => {
+        expect(
+            JSON.parse(
+                runInPage(
+                    neoGuideCode,
+                    fixture('neoseeker/not-found.html')
+                ) as string
+            )
+        ).toEqual({ notFound: true });
     });
 
     it('keeps polling until the page is complete', () => {
