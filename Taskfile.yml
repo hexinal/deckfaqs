@@ -34,6 +34,11 @@ tasks:
         cmds:
             - pnpm run lint
 
+    test:
+        desc: Run the unit tests (vitest)
+        cmds:
+            - pnpm run test
+
     format:
         desc: Format the repo with prettier
         cmds:
