@@ -19,7 +19,6 @@ export const ListElement = ({
     return (
         <PanelSectionRow>
             <ButtonItem
-                //@ts-ignore
                 disableNavSounds={true}
                 layout="below"
                 onClick={handleClick}

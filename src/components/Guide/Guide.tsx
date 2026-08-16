@@ -618,7 +618,6 @@ export const Guide = ({ fullscreen }: GuideProps) => {
                         noFocusRing={!fullscreen}
                     >
                         <Focusable
-                            //@ts-ignore
                             focusableIfNoChildren={true}
                             style={{ background: '#fff' }}
                             className={[
@@ -680,12 +679,10 @@ const FullScreenGuide = ({ onDismiss }: FullScreenGuideProps) => {
                 <Focusable style={{ display: 'flex', width: '100%' }}>
                     {Router.MainRunningApp !== undefined && (
                         <DialogButton
-                            //@ts-ignore
                             disableNavSounds={true}
                             style={{ minWidth: '0px', marginRight: '10px' }}
                             onClick={() => {
                                 setTimeout(
-                                    //@ts-ignore
                                     () => Router.NavigateToRunningApp(),
                                     200
                                 );
@@ -695,7 +692,6 @@ const FullScreenGuide = ({ onDismiss }: FullScreenGuideProps) => {
                         </DialogButton>
                     )}
                     <DialogButton
-                        //@ts-ignore
                         disableNavSounds={true}
                         style={{ ...navButtonStyle, marginRight: '10px' }}
                         onClick={() => {

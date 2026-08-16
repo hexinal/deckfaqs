@@ -19,7 +19,7 @@ export const SearchModal = ({
         setModalResult?.(searchText);
         closeModal?.();
     };
-    const textField = useRef<any>(null);
+    const textField = useRef<{ element?: HTMLElement } | null>(null);
 
     useEffect(() => {
         //This will open up the virtual keyboard
@@ -29,11 +29,9 @@ export const SearchModal = ({
         <ModalRoot closeModal={handleSubmit}>
             <form>
                 <TextField
-                    //@ts-ignore
                     ref={textField}
                     focusOnMount={true}
                     label="Search"
-                    //@ts-ignore
                     placeholder={promptText}
                     onChange={handleText}
                 />
