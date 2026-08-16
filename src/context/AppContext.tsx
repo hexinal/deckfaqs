@@ -70,6 +70,7 @@ export const AppContext = createContext<TAppContext>({
 type AppContextProps = {
     incomingState?: TAppState;
     browserView: any;
+    children?: React.ReactNode;
 };
 
 // This might be kind of overkill but figured why not try non-Redux state management

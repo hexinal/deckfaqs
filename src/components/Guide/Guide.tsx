@@ -4,8 +4,9 @@ import {
     Navigation,
     QuickAccessTab,
     Router,
-} from 'decky-frontend-lib';
-import React, { useContext, useMemo, useRef } from 'react';
+} from '@decky/ui';
+import { routerHook } from '@decky/api';
+import { useContext, useMemo, useRef } from 'react';
 import { useEffect } from 'react';
 import {
     AppContext,
@@ -16,19 +17,20 @@ import parse, {
     HTMLReactParserOptions,
     Element,
     domToReact,
+    type DOMNode,
 } from 'html-react-parser';
 import { ActionType } from '../../reducers/AppReducer';
-import { DefaultProps, getGuideHtml } from '../../utils';
+import { getGuideHtml } from '../../utils';
 import { TocDropdown } from '../Nav/TocDropdown';
 import { Search } from '../Nav/Search';
 import { ScrollPanel } from '../ScrollPanel';
 import Mark from './mark';
 
-type GuideProps = DefaultProps & {
+type GuideProps = {
     fullscreen?: boolean;
 };
 
-export const Guide = ({ serverApi, fullscreen }: GuideProps) => {
+export const Guide = ({ fullscreen }: GuideProps) => {
     const { state, dispatch, browserView } = useContext(AppContext);
     const { currentGuide, search, isLoading } = state;
     const guideDiv = useRef<HTMLDivElement>(null);
@@ -69,7 +71,7 @@ export const Guide = ({ serverApi, fullscreen }: GuideProps) => {
                                 });
                             }}
                         >
-                            {domToReact(children)}
+                            {domToReact(children as DOMNode[])}
                         </a>
                     );
                 } else {
@@ -83,7 +85,6 @@ export const Guide = ({ serverApi, fullscreen }: GuideProps) => {
                                 const baseUrl = currentGuide?.guideUrl ?? '';
                                 getGuideHtml(
                                     `${baseUrl}/${anchor}`,
-                                    serverApi,
                                     browserView,
                                     (result: string) => {
                                         if (anchor.indexOf('#') > 0) {
@@ -105,7 +106,7 @@ export const Guide = ({ serverApi, fullscreen }: GuideProps) => {
                                 );
                             }}
                         >
-                            {domToReact(children)}
+                            {domToReact(children as DOMNode[])}
                         </a>
                     );
                 }
@@ -155,7 +156,6 @@ export const Guide = ({ serverApi, fullscreen }: GuideProps) => {
                 const baseUrl = currentGuide?.guideUrl ?? '';
                 getGuideHtml(
                     `${baseUrl}/#${anchor}`,
-                    serverApi,
                     browserView,
                     (result: string) => {
                         dispatch({
@@ -217,24 +217,20 @@ export const Guide = ({ serverApi, fullscreen }: GuideProps) => {
 
     useEffect(() => {
         if (!fullscreen) {
-            serverApi.routerHook.addRoute('/deckfaqs-fullscreen', () => {
+            routerHook.addRoute('/deckfaqs-fullscreen', () => {
                 return (
                     <AppContextProvider
                         incomingState={stateRef.current}
                         browserView={browserView}
                     >
-                        <FullScreenGuide
-                            serverApi={serverApi}
-                            onDismiss={handleDismiss}
-                        />
+                        <FullScreenGuide onDismiss={handleDismiss} />
                     </AppContextProvider>
                 );
             });
         }
         scrollToAnchor(currentGuide?.anchor);
         return function cleanup() {
-            if (!fullscreen)
-                serverApi.routerHook.removeRoute('/deckfaqs-fullscreen');
+            if (!fullscreen) routerHook.removeRoute('/deckfaqs-fullscreen');
         };
     }, []);
     return useMemo(
@@ -645,7 +641,9 @@ export const Guide = ({ serverApi, fullscreen }: GuideProps) => {
                             height: '100%',
                             margin: fullscreen ? '10px' : '0px',
                         }}
-                        className={!fullscreen && 'deckfaqs_scrollpanel'}
+                        className={
+                            fullscreen ? undefined : 'deckfaqs_scrollpanel'
+                        }
                         noFocusRing={!fullscreen}
                     >
                         <Focusable
@@ -669,10 +667,10 @@ const navButtonStyle = {
     padding: '10px 12px',
 };
 
-type FullScreenGuideProps = DefaultProps & {
+type FullScreenGuideProps = {
     onDismiss: (updatedGuide: GuideContents) => void;
 };
-const FullScreenGuide = ({ serverApi, onDismiss }: FullScreenGuideProps) => {
+const FullScreenGuide = ({ onDismiss }: FullScreenGuideProps) => {
     const { state } = useContext(AppContext);
     const guide = useRef(state.currentGuide);
 
@@ -741,13 +739,12 @@ const FullScreenGuide = ({ serverApi, onDismiss }: FullScreenGuideProps) => {
                                     minWidth: '200px',
                                     marginRight: '10px',
                                 }}
-                                serverApi={serverApi}
                             />
                         )}
                     <Search fullScreen={true} />
                 </Focusable>
             </div>
-            <Guide fullscreen={true} serverApi={serverApi} />
+            <Guide fullscreen={true} />
         </div>
     );
 };

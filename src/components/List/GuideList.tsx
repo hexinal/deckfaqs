@@ -1,10 +1,10 @@
-import React, { useContext, useMemo } from 'react';
+import { useContext, useMemo } from 'react';
 import { AppContext, TableOfContentEntry } from '../../context/AppContext';
 import { ActionType } from '../../reducers/AppReducer';
 import { List } from './List';
-import { DefaultProps, getGuideHtml } from '../../utils';
+import { getGuideHtml } from '../../utils';
 
-export const GuideList = ({ serverApi }: DefaultProps) => {
+export const GuideList = () => {
     const {
         state: { guides },
         dispatch,
@@ -18,7 +18,6 @@ export const GuideList = ({ serverApi }: DefaultProps) => {
         });
         getGuideHtml(
             url,
-            serverApi,
             browserView,
             (result: string, toc: Array<TableOfContentEntry>) => {
                 dispatch({

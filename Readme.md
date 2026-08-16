@@ -4,15 +4,23 @@
 
 A GameFAQs browser for the Steam Deck. This plugin supports both Steam and non-Steam games (like things setup with Steam Rom Manager for example)
 
-Built with [Decky Loader](https://github.com/SteamDeckHomebrew/PluginLoader).
+Built with [Decky Loader](https://github.com/SteamDeckHomebrew/decky-loader).
+
+> This is a maintained fork of the original (now abandoned) [hulkrelax/deckfaqs](https://github.com/hulkrelax/deckfaqs), updated for the current Decky Loader plugin API (v2.0.0+ requires Decky Loader v3 or newer).
 
 ## How to Install
 
-### Current Version (Decky Loader version)
+1. Install [Decky Loader](https://github.com/SteamDeckHomebrew/decky-loader#installation) first.
+2. Download `deckfaqs.zip` from the [latest release](https://github.com/hexinal/deckfaqs/releases/latest) and install it either
+    - from the Steam Deck UI: Decky settings (⚙) → **Developer** → **Install Plugin from ZIP**, or
+    - from a terminal on the Deck: `sh scripts/install_plugin.sh` (downloads the latest release, unzips it into `/home/deck/homebrew/plugins/` and restarts the plugin loader; `scripts/uninstall.sh` removes it).
 
-1. You need to install the [Decky Loader pre-release](https://github.com/SteamDeckHomebrew/PluginLoader#installation) first before getting started.
-2. Download/Install Steps
-    - Install from Decky Loader directly. DeckFAQs is on the Decky Loader store browser. Be sure to download DeckFAQs and not "deckfaqs_plugin_browser" which is legacy and no longer supported
+The version on the Decky store (1.8.x) is the old upstream release and no longer works with current Decky Loader.
+
+## Development
+
+- `pnpm install`, then `pnpm build` (or `task build`) bundles `src/index.tsx` into `dist/index.js`.
+- `task package` builds and zips the plugin into `deckfaqs.zip`, ready to install as above.
 
 ## Features
 

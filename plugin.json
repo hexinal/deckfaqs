@@ -2,6 +2,7 @@
     "name": "DeckFAQs",
     "author": "hulkrelax",
     "flags": [],
+    "api_version": 1,
     "publish": {
         "tags": ["guides", "utility"],
         "description": "A GameFAQs browser for the Steam Deck (both Steam and non-Steam Games)",

@@ -1,0 +1,52 @@
+version: '3'
+
+vars:
+    PLUGIN_DIR: deckfaqs
+    OUT: out
+    ZIP: deckfaqs.zip
+
+tasks:
+    install:
+        desc: Install dependencies
+        cmds:
+            - pnpm install
+
+    build:
+        desc: Bundle src/index.tsx into dist/index.js
+        cmds:
+            - pnpm run build
+        sources:
+            - src/**/*
+            - package.json
+            - tsconfig.json
+            - rollup.config.js
+            - plugin.json
+        generates:
+            - dist/index.js
+
+    typecheck:
+        desc: Type-check without emitting
+        cmds:
+            - npx tsc --noEmit
+
+    format:
+        desc: Format sources with prettier
+        cmds:
+            - npx prettier --write src
+
+    package:
+        desc: Build and zip the plugin (same layout as CI) into deckfaqs.zip
+        deps: [build]
+        cmds:
+            - rm -rf {{.OUT}} {{.ZIP}}
+            - mkdir -p {{.OUT}}/{{.PLUGIN_DIR}}/dist
+            - cp plugin.json package.json LICENSE {{.OUT}}/{{.PLUGIN_DIR}}/
+            - cp dist/index.js dist/index.js.map {{.OUT}}/{{.PLUGIN_DIR}}/dist/
+            - cd {{.OUT}} && zip -r ../{{.ZIP}} {{.PLUGIN_DIR}}
+            - rm -rf {{.OUT}}
+            - 'echo "Created {{.ZIP}} — unzip into /home/deck/homebrew/plugins/ on the Deck, then: sudo systemctl restart plugin_loader"'
+
+    clean:
+        desc: Remove build outputs
+        cmds:
+            - rm -rf dist {{.OUT}} {{.ZIP}}

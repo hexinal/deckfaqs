@@ -1,19 +1,18 @@
-import React, { useEffect, useContext, useRef } from 'react';
+import { useEffect, useContext, useRef } from 'react';
 import { ListItem } from '../List/List';
-import { Router } from 'decky-frontend-lib';
+import { Router } from '@decky/ui';
 import { AppContext } from '../../context/AppContext';
 import { ActionType } from '../../reducers/AppReducer';
 import { ignoreNonSteam, ignoreSteam } from '../../constants';
 import { Nav } from '../Nav/Nav';
 import { MainView } from './MainView';
-import { DefaultProps } from '../../utils';
 
 // This used to use css modules, but with the way the new React Based router works,
 // I have yet to figure out how to import css properly
 
 const SETTINGS = 'deckfaqs_settings';
 
-export const App = ({ serverApi }: DefaultProps) => {
+export const App = () => {
     const {
         state: { pluginState, darkMode },
         dispatch,
@@ -79,7 +78,7 @@ export const App = ({ serverApi }: DefaultProps) => {
             const games: { appName: string; sortAsName: string }[] = [];
             const currentRunningGame = Router.MainRunningApp?.display_name;
             let runningGame: string | undefined = undefined;
-            installFolders.forEach((folder:InstallFolder) => {
+            installFolders.forEach((folder: InstallFolder) => {
                 folder.vecApps.forEach((app) => {
                     if (!ignoreSteam.includes(app.nAppID)) {
                         if (
@@ -97,7 +96,7 @@ export const App = ({ serverApi }: DefaultProps) => {
 
             // Non-Steam Games
             const shortcuts = collectionStore.deckDesktopApps.allApps;
-            shortcuts.forEach(({ sort_as, display_name } ) => {
+            shortcuts.forEach(({ sort_as, display_name }) => {
                 if (!ignoreNonSteam.includes(display_name)) {
                     if (!runningGame && currentRunningGame == display_name)
                         runningGame = currentRunningGame;
@@ -126,8 +125,10 @@ export const App = ({ serverApi }: DefaultProps) => {
         });
 
         SteamClient.Storage.GetJSON(SETTINGS)
-            .then((result:string) => {
-                const settings: { darkMode: boolean } = JSON.parse(result);
+            .then((result) => {
+                const settings: { darkMode: boolean } = JSON.parse(
+                    result as string
+                );
                 dispatch({
                     type: ActionType.UPDATE_DARK_MODE,
                     payload: settings.darkMode,
@@ -204,9 +205,9 @@ export const App = ({ serverApi }: DefaultProps) => {
                 }
 `}
             </style>
-            <Nav serverApi={serverApi} />
+            <Nav />
             <div ref={mainDiv} style={{ padding: '10px', overflow: 'auto' }}>
-                <MainView serverApi={serverApi} />
+                <MainView />
             </div>
         </div>
     );

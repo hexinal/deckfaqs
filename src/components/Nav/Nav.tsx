@@ -6,19 +6,19 @@ import {
     showModal,
     QuickAccessTab,
     Navigation,
-} from 'decky-frontend-lib';
-import React, { useContext, useMemo } from 'react';
+} from '@decky/ui';
+import { useContext, useMemo } from 'react';
 import { BsArrowsFullscreen } from 'react-icons/bs';
 import { FaHome } from 'react-icons/fa';
 import { FiRotateCw } from 'react-icons/fi';
 import { AppContext, TableOfContentEntry } from '../../context/AppContext';
 import { ActionType } from '../../reducers/AppReducer';
-import { DefaultProps, gameSearch, getGuideHtml } from '../../utils';
+import { gameSearch, getGuideHtml } from '../../utils';
 import { Search } from './Search';
 import { SearchModal } from './SearchModal';
 import { TocDropdown } from './TocDropdown';
 
-export const Nav = ({ serverApi }: DefaultProps) => {
+export const Nav = () => {
     const {
         state: { pluginState, currentGuide, darkMode },
         dispatch,
@@ -34,7 +34,6 @@ export const Nav = ({ serverApi }: DefaultProps) => {
             dispatch({ type: ActionType.UPDATE_LOADING, payload: true });
             getGuideHtml(
                 currentGuide.guideUrl,
-                serverApi,
                 browserView,
                 (result: string, toc: Array<TableOfContentEntry>) => {
                     dispatch({
@@ -60,7 +59,7 @@ export const Nav = ({ serverApi }: DefaultProps) => {
 
     const handleSearch = (result: string) => {
         result = result.trim();
-        result && gameSearch(result, serverApi, browserView, dispatch);
+        result && gameSearch(result, browserView, dispatch);
         Navigation.OpenQuickAccessMenu(QuickAccessTab.Decky);
     };
 
@@ -157,7 +156,6 @@ export const Nav = ({ serverApi }: DefaultProps) => {
                             currentGuide.guideToc!.length > 0 ? (
                                 <TocDropdown
                                     style={{ ...btnStyle, minWidth: '160px' }}
-                                    serverApi={serverApi}
                                 />
                             ) : (
                                 <Search />
