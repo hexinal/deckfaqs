@@ -1,2 +1,3 @@
-# The `main` ruleset requires a code-owner review on pull requests.
+# Default reviewer for pull requests (the `main` ruleset requires a PR + green checks,
+# not an approval — single maintainer).
 * @hexinal

@@ -6,6 +6,6 @@
     "publish": {
         "tags": ["guides", "utility"],
         "description": "A GameFAQs browser for the Steam Deck (both Steam and non-Steam Games)",
-        "image": "https://raw.githubusercontent.com/hulkrelax/deckfaqs/main/images/release.png"
+        "image": "https://raw.githubusercontent.com/hexinal/deckfaqs/main/images/release.png"
     }
 }

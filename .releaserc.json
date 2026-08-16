@@ -56,7 +56,7 @@
         [
             "@semantic-release/github",
             {
-                "assets": ["deckfaqs.zip", "deckfaqs.tar.gz"],
+                "assets": ["deckfaqs.zip", "deckfaqs.tar.gz", "SHA256SUMS"],
                 "successComment": false,
                 "failComment": false,
                 "failTitle": false,
