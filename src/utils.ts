@@ -1,13 +1,13 @@
 import { executeInTab, fetchNoCors } from '@decky/api';
 import DOMPurify from 'dompurify';
 import type { Dispatch } from 'react';
-import { SearchResult } from './components/List/GameList';
-import { ListItem } from './components/List/List';
+import type { SearchResult } from './components/List/GameList';
+import type { ListItem } from './components/List/List';
 import { GAMEFAQS_ORIGIN } from './constants';
 import type { BrowserView, TableOfContentEntry } from './context/AppContext';
 import { ActionType, AppActions } from './reducers/AppReducer';
 
-const getGuideCode = `function parseList(list) {
+export const getGuideCode = `function parseList(list) {
     let newT = [];
     for (let element of list.children) {
         const tagName = element.tagName;
@@ -251,8 +251,8 @@ export const getGuideHtml = async (
 // Only report the page once it actually holds the JSON search payload;
 // anything else (still loading, Cloudflare interstitial, ...) keeps
 // the caller polling until MAX_POLLING is reached.
-const getGamesCode = `function get_games() {
-    const text = document.documentElement?.innerText ?? '';
+export const getGamesCode = `function get_games() {
+    const text = document.body?.textContent ?? '';
     try {
         JSON.parse(text);
         return text;
