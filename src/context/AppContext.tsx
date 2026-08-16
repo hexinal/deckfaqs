@@ -1,7 +1,7 @@
 import type { DropdownOption } from '@decky/ui';
 import React, { createContext, useReducer } from 'react';
-import { ListItem } from '../components/List/List';
-import { AppActions, appReducer } from '../reducers/AppReducer';
+import type { ListItem } from '../components/List/List';
+import { type AppActions, appReducer } from '../reducers/AppReducer';
 
 export type PluginState = 'games' | 'results' | 'guides' | 'guide';
 

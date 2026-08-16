@@ -5,7 +5,7 @@ import type { SearchResult } from './components/List/GameList';
 import type { ListItem } from './components/List/List';
 import { GAMEFAQS_ORIGIN } from './constants';
 import type { BrowserView, TableOfContentEntry } from './context/AppContext';
-import { ActionType, AppActions } from './reducers/AppReducer';
+import { ActionType, type AppActions } from './reducers/AppReducer';
 
 export const getGuideCode = `function parseList(list) {
     let newT = [];

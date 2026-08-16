@@ -1,5 +1,5 @@
 import { useEffect, useContext, useRef } from 'react';
-import { ListItem } from '../List/List';
+import type { ListItem } from '../List/List';
 import { Router } from '@decky/ui';
 import { AppContext } from '../../context/AppContext';
 import { ActionType } from '../../reducers/AppReducer';
@@ -110,18 +110,26 @@ export const App = () => {
             };
         };
 
-        getGames().then(({ games, runningGame }) => {
-            dispatch({
-                type: ActionType.UPDATE_GAMES,
-                payload: { games, runningGame },
+        getGames()
+            .then(({ games, runningGame }) => {
+                dispatch({
+                    type: ActionType.UPDATE_GAMES,
+                    payload: { games, runningGame },
+                });
+            })
+            .catch((e: unknown) => {
+                console.error('[DeckFAQs] failed to list installed games', e);
+                dispatch({
+                    type: ActionType.UPDATE_GAMES,
+                    payload: { games: [] },
+                });
             });
-        });
 
         SteamClient.Storage.GetJSON(SETTINGS)
             .then((result) => {
-                const settings: { darkMode: boolean } = JSON.parse(
-                    result as string
-                );
+                const settings = JSON.parse(result as string) as {
+                    darkMode: boolean;
+                };
                 dispatch({
                     type: ActionType.UPDATE_DARK_MODE,
                     payload: settings.darkMode,
