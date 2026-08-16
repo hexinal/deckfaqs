@@ -1,3 +1,10 @@
+## [2.0.2](https://github.com/hexinal/deckfaqs/compare/v2.0.1...v2.0.2) (2026-08-16)
+
+
+### Bug Fixes
+
+* change README to reflect new fork ([f0d6cc1](https://github.com/hexinal/deckfaqs/commit/f0d6cc1eabf4cef7374b6e25152a5d2e85ee54a8))
+
 ## [2.0.1](https://github.com/hexinal/deckfaqs/compare/v2.0.0...v2.0.1) (2026-08-16)
 
 
