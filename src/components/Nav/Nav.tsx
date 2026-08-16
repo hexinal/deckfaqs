@@ -82,7 +82,6 @@ export const Nav = () => {
                     >
                         {pluginState !== 'results' && (
                             <DialogButton
-                                //@ts-ignore
                                 disableNavSounds={true}
                                 style={{
                                     ...btnStyle,
@@ -101,7 +100,6 @@ export const Nav = () => {
                         )}
                         {pluginState === 'guide' && (
                             <DialogButton
-                                //@ts-ignore
                                 disableNavSounds={true}
                                 style={btnStyle}
                                 onClick={reload}
@@ -115,7 +113,6 @@ export const Nav = () => {
                             </DialogButton>
                         )}
                         <DialogButton
-                            //@ts-ignore
                             disableNavSounds={true}
                             style={btnStyle}
                             onClick={back}
@@ -132,7 +129,6 @@ export const Nav = () => {
                             }}
                         >
                             <DialogButton
-                                //@ts-ignore
                                 disableNavSounds={true}
                                 style={{
                                     ...btnStyle,
@@ -166,7 +162,6 @@ export const Nav = () => {
             ) : (
                 <div style={{ flex: '0 1 auto', padding: '0 10px' }}>
                     <DialogButton
-                        //@ts-ignore
                         disableNavSounds={true}
                         style={{
                             marginBottom: '10px',

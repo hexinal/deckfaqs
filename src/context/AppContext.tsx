@@ -1,19 +1,21 @@
+import type { DropdownOption } from '@decky/ui';
 import React, { createContext, useReducer } from 'react';
 import { ListItem } from '../components/List/List';
 import { AppActions, appReducer } from '../reducers/AppReducer';
 
 export type PluginState = 'games' | 'results' | 'guides' | 'guide';
 
-export type TableOfContentEntry = {
-    data: any;
-    label: string;
-};
+/** The hidden Steam BrowserView used to load GameFAQs pages (see src/index.tsx). */
+export type BrowserView = ReturnType<typeof SteamClient.BrowserView.Create>;
+
+/** TOC entries feed the Nav dropdown directly: `{data: href, label}` or nested `{label, options}`. */
+export type TableOfContentEntry = DropdownOption;
 
 export type GuideContents = {
     guideUrl?: string;
     guideHtml?: string;
     guideToc?: Array<TableOfContentEntry>;
-    currentTocSection?: any;
+    currentTocSection?: string;
     anchor?: string;
 };
 
@@ -39,13 +41,13 @@ export type TAppState = {
     isLoading: boolean;
     currentGuide?: GuideContents;
     search: GuideSearch;
-    browserView: any;
+    browserView?: BrowserView;
 };
 
 type TAppContext = {
     state: TAppState;
     dispatch: React.Dispatch<AppActions>;
-    browserView: any;
+    browserView?: BrowserView;
 };
 
 export const initialState: TAppState = {
@@ -69,7 +71,7 @@ export const AppContext = createContext<TAppContext>({
 
 type AppContextProps = {
     incomingState?: TAppState;
-    browserView: any;
+    browserView?: BrowserView;
     children?: React.ReactNode;
 };
 
