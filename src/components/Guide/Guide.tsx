@@ -203,7 +203,7 @@ export const Guide = ({ fullscreen }: GuideProps) => {
     }, [search.searchText]);
 
     useEffect(() => {
-        let elements = guideDiv.current?.querySelectorAll(
+        const elements = guideDiv.current?.querySelectorAll(
             '[class="deckfaqs_highlight"]'
         );
         if (
@@ -657,7 +657,7 @@ const FullScreenGuide = ({ onDismiss }: FullScreenGuideProps) => {
 
     useEffect(() => {
         return function cleanup() {
-            guide.current && onDismiss(guide.current);
+            if (guide.current) onDismiss(guide.current);
         };
     }, []);
     return (

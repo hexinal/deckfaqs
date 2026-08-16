@@ -137,8 +137,8 @@ export const appReducer = (state: TAppState, action: AppActions): TAppState => {
                 },
                 pluginState: 'guide',
             };
-        case ActionType.BACK:
-            let newPluginState: PluginState = 'games';
+        case ActionType.BACK: {
+            let newPluginState: PluginState;
             switch (state.pluginState) {
                 case 'guides':
                     newPluginState = 'results';
@@ -156,6 +156,7 @@ export const appReducer = (state: TAppState, action: AppActions): TAppState => {
                 currentGuide: undefined,
                 isLoading: false,
             };
+        }
         case ActionType.BACK_TO_STATE:
             return {
                 ...state,
