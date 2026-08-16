@@ -39,7 +39,7 @@ Never bump `package.json` by hand — the bot commits `chore(release): x.y.z [sk
 
 Commit messages are linted with [commitlint](https://commitlint.js.org) both locally (`.husky/commit-msg`) and in CI (`Lint commits` job); PR titles are linted as well because squash merges use the PR title as the commit message. `.husky/pre-commit` runs prettier on staged files. If you really need to skip the hooks once: `git commit --no-verify`.
 
-Dependency updates: Dependabot only opens **security** PRs here (`.github/dependabot.yml`); they use `fix(deps)`/`chore(deps)`/`ci(deps)` prefixes so a vulnerable runtime dependency ships as a patch release while dev-dependency/Actions bumps don't release. Regular version bumps are done by hand.
+Dependency updates: for npm, Dependabot only opens **security** PRs here (`.github/dependabot.yml`); they use `fix(deps)`/`chore(deps)` prefixes so a vulnerable runtime dependency ships as a patch release while dev-dependency bumps don't. Regular npm version bumps are done by hand; `pnpm.minimumReleaseAge` in `package.json` makes pnpm skip versions published less than 3 days ago (supply-chain guard), so a brand-new release may need to wait or be pinned explicitly. GitHub Actions are pinned to commit SHAs in the workflows and Dependabot keeps those pins current (`ci(deps)`, no release). Releases attach a `SHA256SUMS` file; `scripts/install_plugin.sh` verifies against it. Security issues: see `SECURITY.md`.
 
 ## Pull requests
 
