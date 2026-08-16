@@ -12,6 +12,7 @@ import { BsArrowsFullscreen } from 'react-icons/bs';
 import { FaHome } from 'react-icons/fa';
 import { FiRotateCw } from 'react-icons/fi';
 import { AppContext, TableOfContentEntry } from '../../context/AppContext';
+import { SETTINGS } from '../../constants';
 import { ActionType } from '../../reducers/AppReducer';
 import { gameSearch, getGuideHtml } from '../../utils';
 import { Search } from './Search';
@@ -64,6 +65,8 @@ export const Nav = () => {
     const handleDarkMode = useCallback(
         (result: boolean) => {
             dispatch({ type: ActionType.UPDATE_DARK_MODE, payload: result });
+            // Persist on change; the QAM panel is alwaysRender so it rarely unmounts.
+            SteamClient.Storage.SetObject(SETTINGS, { darkMode: result });
         },
         [dispatch]
     );
