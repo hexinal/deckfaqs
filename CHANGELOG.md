@@ -1,3 +1,9 @@
+## [2.0.5](https://github.com/hexinal/deckfaqs/compare/v2.0.4...v2.0.5) (2026-08-16)
+
+### Bug Fixes
+
+* honour ignore lists for the running game, persist dark mode on toggle ([#6](https://github.com/hexinal/deckfaqs/issues/6)) ([1e47f6e](https://github.com/hexinal/deckfaqs/commit/1e47f6e0585f0bd9f519ee869c8fecbf14fc89ec))
+
 ## [2.0.4](https://github.com/hexinal/deckfaqs/compare/v2.0.3...v2.0.4) (2026-08-16)
 
 ### Bug Fixes
