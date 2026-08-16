@@ -1,12 +1,9 @@
 import { useCallback, useContext, useMemo } from 'react';
 import { AppContext } from '../../context/AppContext';
 import { ActionType } from '../../reducers/AppReducer';
-import {
-    getContent,
-    getGuidesCode,
-    parseGuideList,
-    request,
-} from '../../utils';
+import { getContent, request } from '../../utils';
+import { getGuidesCode, parseGuideList } from '../../sources/gamefaqs';
+import { guideListUrl } from '../../sources/source';
 import { List } from './List';
 
 export const ResultList = () => {
@@ -25,7 +22,7 @@ export const ResultList = () => {
                         type: ActionType.UPDATE_PLUGIN_STATE,
                         payload: { pluginState: 'guides', isLoading: true },
                     });
-                    return getContent(`${url}/faqs`, ctx, getGuidesCode);
+                    return getContent(guideListUrl(url), ctx, getGuidesCode);
                 },
                 (raw) => {
                     dispatch({

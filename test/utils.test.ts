@@ -3,28 +3,37 @@ import type { AppActions } from '../src/reducers/AppReducer';
 import { ActionType } from '../src/reducers/AppReducer';
 import type { BrowserView } from '../src/context/AppContext';
 import {
-    ERROR_BAD_PAYLOAD,
     ERROR_NO_BROWSER_VIEW,
     cancelPendingRequests,
     getGuideHtml,
-    isGameFaqsUrl,
-    parseGuideList,
-    parseSearchResults,
     request,
     retryLastRequest,
     toCefTabUrl,
 } from '../src/utils';
+import { parseGuideList, parseSearchResults } from '../src/sources/gamefaqs';
+import { badPayloadError, isAllowedScrapeUrl } from '../src/sources/source';
 
-describe('isGameFaqsUrl', () => {
-    it('accepts only the GameFAQs origin', () => {
-        expect(isGameFaqsUrl('https://gamefaqs.gamespot.com/ps2/x/faqs')).toBe(
-            true
-        );
-        expect(isGameFaqsUrl('https://gamefaqs.gamespot.com.evil.com/')).toBe(
+const ERROR_BAD_PAYLOAD = badPayloadError('gamefaqs');
+
+describe('isAllowedScrapeUrl', () => {
+    it('accepts only the guide sites', () => {
+        expect(
+            isAllowedScrapeUrl('https://gamefaqs.gamespot.com/ps2/x/faqs')
+        ).toBe(true);
+        expect(
+            isAllowedScrapeUrl(
+                'https://www.neoseeker.com/dragon-quest-xi/faqs/'
+            )
+        ).toBe(true);
+        expect(
+            isAllowedScrapeUrl('https://gamefaqs.gamespot.com.evil.com/')
+        ).toBe(false);
+        expect(isAllowedScrapeUrl('http://gamefaqs.gamespot.com/')).toBe(false);
+        // Neoseeker's CDN and image hosts are fetched/embedded directly, never loaded in the view.
+        expect(isAllowedScrapeUrl('https://cdn.staticneo.com/x.json')).toBe(
             false
         );
-        expect(isGameFaqsUrl('http://gamefaqs.gamespot.com/')).toBe(false);
-        expect(isGameFaqsUrl('not a url')).toBe(false);
+        expect(isAllowedScrapeUrl('not a url')).toBe(false);
     });
 });
 

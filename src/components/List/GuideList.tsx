@@ -4,6 +4,7 @@ import { ActionType } from '../../reducers/AppReducer';
 import { List } from './List';
 import { getGuideHtml, request } from '../../utils';
 import { loadPositions } from '../../positions';
+import { pageUrl } from '../../sources/source';
 
 export const GuideList = () => {
     const {
@@ -25,10 +26,7 @@ export const GuideList = () => {
                     // paginated guide, then the saved scroll ratio.
                     const pos = (await loadPositions())[url];
                     const page = pos?.page ?? '';
-                    const res = await getGuideHtml(
-                        page ? `${url}/${page}` : url,
-                        ctx
-                    );
+                    const res = await getGuideHtml(pageUrl(url, page), ctx);
                     return { ...res, page, restore: pos };
                 },
                 ({ html, toc, page, restore }) => {

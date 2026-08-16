@@ -3,6 +3,7 @@ import { useContext, type CSSProperties } from 'react';
 import { AppContext } from '../../context/AppContext';
 import { ActionType } from '../../reducers/AppReducer';
 import { getGuideHtml, request } from '../../utils';
+import { pageOf, pageUrl } from '../../sources/source';
 
 type TocDropdownProps = {
     style?: CSSProperties;
@@ -17,7 +18,8 @@ export const TocDropdown = ({ style }: TocDropdownProps) => {
     const handleTOCChange = (data: SingleDropdownOption) => {
         const path = data.data as string;
         let anchor: string | undefined = undefined;
-        const href = `${currentGuide?.guideUrl}/${path}`;
+        const guideUrl = currentGuide?.guideUrl ?? '';
+        const href = pageUrl(guideUrl, path);
         if (path.startsWith('#')) {
             anchor = path.substring(1);
             dispatch({
@@ -49,7 +51,7 @@ export const TocDropdown = ({ style }: TocDropdownProps) => {
                             ...currentGuide,
                             guideHtml: html,
                             anchor,
-                            page: path.split('#')[0],
+                            page: pageOf(guideUrl, path).page,
                             currentTocSection: path,
                             restore: undefined,
                         },

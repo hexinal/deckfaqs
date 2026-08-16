@@ -1,6 +1,10 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { getGuidesCode, getGuideCode, getGamesCode } from '../src/utils';
+import {
+    getGuidesCode,
+    getGuideCode,
+    getGamesCode,
+} from '../src/sources/gamefaqs';
 
 // The extraction scripts run inside the GameFAQs tab via executeInTab and
 // return the value of their last expression; mimic that with an indirect eval

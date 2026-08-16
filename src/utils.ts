@@ -1,53 +1,20 @@
 import { executeInTab, fetchNoCors } from '@decky/api';
 import DOMPurify from 'dompurify';
 import type { Dispatch } from 'react';
-import type { SearchResult } from './components/List/GameList';
-import type { ListItem } from './components/List/List';
-import { GAMEFAQS_ORIGIN } from './constants';
 import type { BrowserView, TableOfContentEntry } from './context/AppContext';
 import { ActionType, type AppActions } from './reducers/AppReducer';
-
-export const getGuideCode = `function parseList(list) {
-    let newT = [];
-    for (let element of list.children) {
-        const tagName = element.tagName;
-        switch (tagName) {
-            case 'LI':
-                const a = element.getElementsByTagName('a')[0];
-                if (a)
-                    newT.push({
-                        data: a.getAttribute('href'),
-                        label: a.textContent,
-                    });
-                break;
-            case 'OL':
-                let label = element.previousSibling?.textContent;
-                let res = parseList(element);
-                newT.push({ label, options: res });
-                break;
-        }
-    }
-
-    return newT;
-}
-
-function get_guide() {
-    let faq = document.getElementById('faqwrap');
-    let tocObjc = [];
-    if (faq) {
-        let toc = faq.getElementsByClassName('ftoc');
-        if (toc.length > 0) {
-            let mainList = toc[0].getElementsByTagName('ol');
-            if (mainList.length > 0) {
-                tocObjc = parseList(mainList[0]);
-            }
-        }
-        return JSON.stringify({ guide: faq.outerHTML, toc: tocObjc });
-    }
-    return undefined;
-}
-get_guide();
-`;
+import {
+    gamefaqsSearchUrl,
+    getGamesCode,
+    getGuideCode,
+    parseSearchResults,
+} from './sources/gamefaqs';
+import {
+    badPayloadError,
+    isAllowedScrapeUrl,
+    sourceOf,
+    unreachableError,
+} from './sources/source';
 
 async function delay(ms: number, state = null) {
     return new Promise((resolve, _reject) => {
@@ -61,20 +28,11 @@ const BLANK_PAGE = 'data:text/html,<body><%2Fbody>';
 
 export const ERROR_NO_BROWSER_VIEW =
     "Steam's browser view is unavailable. Restart Steam and try again.";
+// Fallback for rejections that are not Errors; site-specific messages come from sources/source.ts.
 const ERROR_UNREACHABLE =
-    "Couldn't load GameFAQs. Check the connection and retry.";
-export const ERROR_BAD_PAYLOAD =
-    'GameFAQs returned something unexpected. Retry, or update DeckFAQs if it keeps happening.';
+    "Couldn't load the guide. Check the connection and retry.";
 
 type CefTab = { url: string; title: string };
-
-export const isGameFaqsUrl = (url: string): boolean => {
-    try {
-        return new URL(url).origin === GAMEFAQS_ORIGIN;
-    } catch {
-        return false;
-    }
-};
 
 // CEF reports the loaded URL percent-encoded (including apostrophes);
 // don't re-encode URLs that already contain escapes.
@@ -184,8 +142,8 @@ const doScrape = async (
 ): Promise<string> => {
     if (cancelled()) return '';
     if (!browserView) throw new Error(ERROR_NO_BROWSER_VIEW);
-    // The BrowserView shares Steam's CEF profile: only ever point it at GameFAQs.
-    if (!isGameFaqsUrl(url)) {
+    // The BrowserView shares Steam's CEF profile: only ever point it at the guide sites.
+    if (!isAllowedScrapeUrl(url)) {
         throw new Error(`Refusing to load off-origin URL ${url}`);
     }
     const tabUrl = toCefTabUrl(url);
@@ -203,7 +161,7 @@ const doScrape = async (
     }
     if (!result && !cancelled()) {
         console.warn(`[DeckFAQs] no content retrieved for ${url}`);
-        throw new Error(ERROR_UNREACHABLE);
+        throw new Error(unreachableError(sourceOf(url)));
     }
     return result;
 };
@@ -244,99 +202,8 @@ export const getGuideHtml = async (
         };
     } catch (e) {
         console.error('[DeckFAQs] failed to parse guide payload', e);
-        throw new Error(ERROR_BAD_PAYLOAD, { cause: e });
+        throw new Error(badPayloadError(sourceOf(url)), { cause: e });
     }
-};
-
-// Only report the page once it actually holds the JSON search payload;
-// anything else (still loading, Cloudflare interstitial, ...) keeps
-// the caller polling until MAX_POLLING is reached.
-export const getGamesCode = `function get_games() {
-    const text = document.body?.textContent ?? '';
-    try {
-        JSON.parse(text);
-        return text;
-    } catch (e) {
-        return '';
-    }
-}
-get_games()`;
-
-/** Turns the raw GameFAQs search payload into list items. */
-export const parseSearchResults = (raw: string): ListItem[] => {
-    let results: unknown;
-    try {
-        results = raw ? JSON.parse(raw) : [];
-    } catch (e) {
-        console.error('[DeckFAQs] unexpected search response', e);
-        throw new Error(ERROR_BAD_PAYLOAD, { cause: e });
-    }
-    if (!Array.isArray(results)) return [];
-    return (results as SearchResult[]).flatMap((r) =>
-        r.product_name && r.url
-            ? [{ text: `${r.product_name}`, url: `${GAMEFAQS_ORIGIN}${r.url}` }]
-            : []
-    );
-};
-
-// Runs in the game's /faqs page. Returns undefined while the guide lists have
-// not rendered yet (keeps polling), '[]' for games without guides, else a JSON
-// array of {href, title, version, date} for every guide entry.
-export const getGuidesCode = `function get_guides() {
-    const lists = document.querySelectorAll('ol.guides');
-    if (lists.length === 0) {
-        const text = document.body?.textContent ?? '';
-        return text.includes('Want to Write Your Own Guide?') ? '[]' : undefined;
-    }
-    const out = [];
-    for (const li of document.querySelectorAll('ol.guides li')) {
-        const a = li.querySelector('a[href*="/faqs/"]');
-        if (!a) continue;
-        const href = a.getAttribute('href') || '';
-        if (!/\\/faqs\\/\\d+/.test(href)) continue;
-        const meta = li.querySelector('.meta.float_r');
-        const metaText = meta ? (meta.textContent || '').trim() : '';
-        const version = metaText.startsWith('v.') ? metaText.split(',')[0].trim() : '';
-        const dateEl = li.querySelector('.guide_date');
-        const date = dateEl
-            ? dateEl.getAttribute('title') || (dateEl.textContent || '').trim()
-            : '';
-        out.push({ href, title: (a.textContent || '').trim(), version, date });
-    }
-    return JSON.stringify(out);
-}
-get_guides()`;
-
-type GuideEntry = {
-    href: string;
-    title: string;
-    version: string;
-    date: string;
-};
-
-/** Turns the JSON emitted by getGuidesCode into list items. */
-export const parseGuideList = (raw: string): ListItem[] => {
-    let entries: unknown;
-    try {
-        entries = raw ? JSON.parse(raw) : [];
-    } catch (e) {
-        console.error('[DeckFAQs] unexpected guide list payload', e);
-        throw new Error(ERROR_BAD_PAYLOAD, { cause: e });
-    }
-    if (!Array.isArray(entries)) return [];
-    return (entries as Partial<GuideEntry>[]).flatMap((entry) => {
-        if (!entry?.href || !entry.title) return [];
-        let url: string;
-        try {
-            url = new URL(entry.href, GAMEFAQS_ORIGIN).href;
-        } catch {
-            return [];
-        }
-        const text = [entry.title, entry.version, entry.date]
-            .filter(Boolean)
-            .join(' - ');
-        return [{ text, url }];
-    });
 };
 
 export const gameSearch = (
@@ -344,8 +211,7 @@ export const gameSearch = (
     browserView: BrowserView | undefined,
     dispatch: Dispatch<AppActions>
 ) => {
-    const term = encodeURIComponent(game.trim()).replace(/%20/g, '+');
-    const searchUrl = `${GAMEFAQS_ORIGIN}/ajax/home_game_search?term=${term}`;
+    const searchUrl = gamefaqsSearchUrl(game);
     request(
         { browserView, dispatch },
         (ctx) => {

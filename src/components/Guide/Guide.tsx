@@ -27,7 +27,7 @@ import parse, {
 } from 'html-react-parser';
 import { ActionType } from '../../reducers/AppReducer';
 import { getGuideHtml, request } from '../../utils';
-import { GAMEFAQS_ORIGIN } from '../../constants';
+import { imageOrigins, pageOf, pageUrl, sourceOf } from '../../sources/source';
 import {
     type AnchorTop,
     getPosition,
@@ -112,26 +112,22 @@ export const Guide = ({ fullscreen }: GuideProps) => {
                                                 payload: true,
                                             });
                                             return getGuideHtml(
-                                                `${baseUrl}/${anchor}`,
+                                                pageUrl(baseUrl, anchor),
                                                 ctx
                                             );
                                         },
                                         ({ html }) => {
-                                            const page = anchor.split('#')[0];
-                                            if (anchor.indexOf('#') > 0) {
-                                                anchor = anchor.substring(
-                                                    anchor.indexOf('#') + 1
-                                                );
-                                            } else {
-                                                anchor = '';
-                                            }
+                                            const target = pageOf(
+                                                baseUrl,
+                                                anchor
+                                            );
                                             dispatch({
                                                 type: ActionType.UPDATE_GUIDE,
                                                 payload: {
                                                     ...currentGuide,
                                                     guideHtml: html,
-                                                    anchor,
-                                                    page,
+                                                    anchor: target.anchor,
+                                                    page: target.page,
                                                     restore: undefined,
                                                 },
                                             });
@@ -156,15 +152,18 @@ export const Guide = ({ fullscreen }: GuideProps) => {
                     domNode.attribs &&
                     domNode.attribs.src
                 ) {
-                    // Resolve relative image paths against GameFAQs; drop anything off-origin.
+                    // Resolve relative image paths against the guide's site; drop
+                    // anything outside that source's image hosts.
+                    const guideUrl = currentGuide?.guideUrl ?? '';
+                    const allowed = imageOrigins(sourceOf(guideUrl));
                     let src: string;
                     try {
-                        src = new URL(domNode.attribs.src, GAMEFAQS_ORIGIN)
-                            .href;
+                        src = new URL(domNode.attribs.src, allowed[0]).href;
                     } catch {
                         return <></>;
                     }
-                    if (!src.startsWith(`${GAMEFAQS_ORIGIN}/`)) return <></>;
+                    if (!allowed.some((origin) => src.startsWith(`${origin}/`)))
+                        return <></>;
                     return <img {...domNode.attribs} src={src} />;
                 }
                 return domNode;
@@ -237,7 +236,8 @@ export const Guide = ({ fullscreen }: GuideProps) => {
                     const baseUrl = guide?.guideUrl ?? '';
                     request(
                         { browserView, dispatch },
-                        (ctx) => getGuideHtml(`${baseUrl}/#${anchor}`, ctx),
+                        (ctx) =>
+                            getGuideHtml(pageUrl(baseUrl, `#${anchor}`), ctx),
                         ({ html }) => {
                             dispatch({
                                 type: ActionType.UPDATE_GUIDE,

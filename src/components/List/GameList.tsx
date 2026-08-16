@@ -4,11 +4,6 @@ import { AppContext } from '../../context/AppContext';
 import { gameSearch } from '../../utils';
 import { List } from './List';
 
-export type SearchResult = {
-    product_name: string | undefined;
-    url: string | undefined;
-};
-
 export const GameList = () => {
     const { state, dispatch, browserView } = useContext(AppContext);
 
