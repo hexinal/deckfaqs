@@ -6,6 +6,8 @@ yarn-debug.log*
 yarn-error.log*
 lerna-debug.log*
 
+CLAUDE.md
+
 # Diagnostic reports (https://nodejs.org/api/report.html)
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 
@@ -107,3 +109,5 @@ dist
 /out
 /deckfaqs.zip
 /.task
+/deckfaqs.tar.gz
+/deckfaqs/
