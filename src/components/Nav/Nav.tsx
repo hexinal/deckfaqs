@@ -62,6 +62,7 @@ export const Nav = () => {
                             guideHtml: html,
                             guideUrl,
                             guideToc: toc,
+                            page: '',
                         },
                     });
                 }

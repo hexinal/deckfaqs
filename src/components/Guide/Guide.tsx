@@ -21,6 +21,7 @@ import parse, {
 import { ActionType } from '../../reducers/AppReducer';
 import { getGuideHtml, request } from '../../utils';
 import { GAMEFAQS_ORIGIN } from '../../constants';
+import { getPosition, savePosition } from '../../positions';
 import { TocDropdown } from '../Nav/TocDropdown';
 import { Search } from '../Nav/Search';
 import { ScrollPanel } from '../ScrollPanel';
@@ -69,7 +70,11 @@ export const Guide = ({ fullscreen }: GuideProps) => {
                                     e.preventDefault();
                                     dispatch({
                                         type: ActionType.UPDATE_GUIDE,
-                                        payload: { ...currentGuide, anchor },
+                                        payload: {
+                                            ...currentGuide,
+                                            anchor,
+                                            restoreRatio: undefined,
+                                        },
                                     });
                                 }}
                             >
@@ -99,6 +104,7 @@ export const Guide = ({ fullscreen }: GuideProps) => {
                                             );
                                         },
                                         ({ html }) => {
+                                            const page = anchor.split('#')[0];
                                             if (anchor.indexOf('#') > 0) {
                                                 anchor = anchor.substring(
                                                     anchor.indexOf('#') + 1
@@ -112,6 +118,8 @@ export const Guide = ({ fullscreen }: GuideProps) => {
                                                     ...currentGuide,
                                                     guideHtml: html,
                                                     anchor,
+                                                    page,
+                                                    restoreRatio: undefined,
                                                 },
                                             });
                                         }
@@ -154,13 +162,34 @@ export const Guide = ({ fullscreen }: GuideProps) => {
 
     const handleDismiss = useCallback(
         (updatedGuide: GuideContents) => {
+            // Re-apply the position the fullscreen view left off at.
+            const pos = updatedGuide.guideUrl
+                ? getPosition(updatedGuide.guideUrl)
+                : undefined;
             dispatch({
                 type: ActionType.UPDATE_GUIDE,
-                payload: updatedGuide,
+                payload: {
+                    ...updatedGuide,
+                    restoreRatio:
+                        pos && pos.page === (updatedGuide.page ?? '')
+                            ? pos.ratio
+                            : undefined,
+                },
             });
         },
         [dispatch]
     );
+
+    // The element that actually scrolls: Steam's ScrollPanel wrapping guideDiv.
+    const getScrollElement = useCallback((): HTMLElement | null => {
+        let el = guideDiv.current?.parentElement ?? null;
+        while (el) {
+            const overflow = getComputedStyle(el).overflowY;
+            if (overflow === 'auto' || overflow === 'scroll') return el;
+            el = el.parentElement;
+        }
+        return guideDiv.current?.parentElement ?? null;
+    }, []);
 
     // Reads the guide through stateRef so the callback identity stays stable
     // and the anchor effect below only re-runs when anchor/html change.
@@ -188,6 +217,8 @@ export const Guide = ({ fullscreen }: GuideProps) => {
                                     ...guide,
                                     guideHtml: html,
                                     anchor,
+                                    page: '',
+                                    restoreRatio: undefined,
                                 },
                             });
                         }
@@ -266,6 +297,58 @@ export const Guide = ({ fullscreen }: GuideProps) => {
         // initial anchor; later anchor changes are handled by the effect above.
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
+    // Remember the reading position (per guide + page) as the user scrolls,
+    // and flush the last known one when this view goes away (Back, fullscreen
+    // dismiss, plugin unload).
+    const guideUrl = currentGuide?.guideUrl;
+    const page = currentGuide?.page ?? '';
+    useEffect(() => {
+        const el = getScrollElement();
+        if (!el || !guideUrl || isLoading || error) return;
+        let last: number | undefined;
+        const onScroll = () => {
+            const range = el.scrollHeight - el.clientHeight;
+            if (range <= 0) return;
+            last = Math.min(1, Math.max(0, el.scrollTop / range));
+            savePosition(guideUrl, { page, ratio: last });
+        };
+        el.addEventListener('scroll', onScroll, { passive: true });
+        return () => {
+            el.removeEventListener('scroll', onScroll);
+            if (last !== undefined) {
+                savePosition(guideUrl, { page, ratio: last }, true);
+            }
+        };
+    }, [guideUrl, page, isLoading, error, getScrollElement]);
+
+    // Restore a saved position: `restoreRatio` is set when the guide is opened
+    // from the list (or handed back from fullscreen); on first mount fall back
+    // to the in-memory cache so fullscreen starts where the panel was. Anchors
+    // win — they mean the user asked for a specific section.
+    const restoredFor = useRef<GuideContents | undefined>(undefined);
+    useEffect(() => {
+        if (!currentGuide || currentGuide === restoredFor.current) return;
+        const first = restoredFor.current === undefined;
+        restoredFor.current = currentGuide;
+        let ratio = currentGuide.restoreRatio;
+        if (ratio === undefined && first && currentGuide.guideUrl) {
+            const pos = getPosition(currentGuide.guideUrl);
+            if (pos && pos.page === (currentGuide.page ?? '')) {
+                ratio = pos.ratio;
+            }
+        }
+        if (ratio === undefined || currentGuide.anchor) return;
+        const el = getScrollElement();
+        if (!el) return;
+        const target = ratio;
+        const apply = () => {
+            el.scrollTop = target * (el.scrollHeight - el.clientHeight);
+        };
+        apply();
+        // Once more after layout settles (fonts/images can change the height).
+        const raf = requestAnimationFrame(apply);
+        return () => cancelAnimationFrame(raf);
+    }, [currentGuide, getScrollElement]);
     return useMemo(
         () =>
             error ? (

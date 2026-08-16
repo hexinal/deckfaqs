@@ -17,6 +17,10 @@ export type GuideContents = {
     guideToc?: Array<TableOfContentEntry>;
     currentTocSection?: string;
     anchor?: string;
+    /** Relative page path of guideHtml within a paginated guide ('' / undefined = first page). */
+    page?: string;
+    /** Saved scroll ratio to apply once when the guide is (re)opened; see positions.ts. */
+    restoreRatio?: number;
 };
 
 export type GuideSearch = {
