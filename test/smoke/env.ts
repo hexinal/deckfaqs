@@ -22,7 +22,7 @@ type Fn = (...args: unknown[]) => unknown;
 type Props = Record<string, unknown> & { children?: React.ReactNode };
 
 // ---------------------------------------------------------------------------
-// Fixtures: URL path -> HTML the hidden BrowserView "loads".
+// Fixtures: host + URL path -> HTML the hidden BrowserView "loads".
 // ---------------------------------------------------------------------------
 const fixture = (name: string) => readFileSync(`test/fixtures/${name}`, 'utf8');
 
@@ -32,21 +32,32 @@ const searchPayload = JSON.stringify([
 ]);
 
 const pages: Record<string, () => string> = {
-    '/ajax/home_game_search': () =>
+    'gamefaqs.gamespot.com/ajax/home_game_search': () =>
         `<html><body>${searchPayload}</body></html>`,
-    '/ps2/197344-final-fantasy-x/faqs': () =>
+    'gamefaqs.gamespot.com/ps2/197344-final-fantasy-x/faqs': () =>
         fixture('faqs-final-fantasy-x.html'),
-    '/ps2/197344-final-fantasy-x/faqs/69037': () =>
+    'gamefaqs.gamespot.com/ps2/197344-final-fantasy-x/faqs/69037': () =>
         fixture('guide-ffx-69037.html'),
 };
+
+// Neoseeker's quick-search: static JSONP on its CDN, fetched with fetchNoCors
+// (never through the BrowserView). Keyed by the normalised keyword.
+const qsPayloads: Record<string, string> = {};
+const qsFor = (kw: string) =>
+    qsPayloads[kw] ??
+    `qs({"keywords":"${kw}","timestamp":0,"products":[],"forums":[]});`;
 
 // ---------------------------------------------------------------------------
 // Fake CEF / hidden BrowserView.
 // ---------------------------------------------------------------------------
 export const cef = {
     currentUrl: '',
-    /** URLs that never finish loading (simulates an offline GameFAQs). */
+    /** URLs that never finish loading (simulates an offline guide site). */
     blackhole: new Set<string>(),
+    /** Hosts whose direct fetches (fetchNoCors) fail (simulates an offline CDN). */
+    offline: new Set<string>(),
+    /** Neoseeker quick-search keywords requested so far, in order. */
+    qsRequests: [] as string[],
     loadUrl: vi.fn((url: string) => {
         cef.currentUrl = url;
     }),
@@ -56,6 +67,8 @@ export const cef = {
     reset() {
         cef.currentUrl = '';
         cef.blackhole.clear();
+        cef.offline.clear();
+        cef.qsRequests.length = 0;
         cef.loadUrl.mockClear();
         cef.executeInTab.mockClear();
         cef.fetchNoCors.mockClear();
@@ -65,13 +78,14 @@ export const cef = {
 
 const pageFor = (url: string): string | undefined => {
     if (cef.blackhole.has(url)) return undefined;
-    let path: string;
+    let key: string;
     try {
-        path = new URL(url).pathname.replace(/\/$/, '');
+        const u = new URL(url);
+        key = u.hostname + u.pathname.replace(/\/$/, '');
     } catch {
         return undefined;
     }
-    return pages[path]?.();
+    return pages[key]?.();
 };
 
 // CEF reports tab URLs percent-encoded (apostrophes included) — mirror utils.ts.
@@ -80,14 +94,34 @@ const cefEncode = (url: string) => {
     return (alreadyEncoded ? url : encodeURI(url)).replace(/'/g, '%27');
 };
 
+const QS_URL =
+    /^https:\/\/cdn\.staticneo\.com\/neoassets\/data\/qs\/[^/]+\/([^/]+)\.json$/;
+
 cef.fetchNoCors.mockImplementation((url: string) => {
-    if (!url.startsWith('http://localhost:8080/json')) {
-        return Promise.resolve({ ok: false });
+    if (url.startsWith('http://localhost:8080/json')) {
+        const tabs = cef.currentUrl
+            ? [{ url: cefEncode(cef.currentUrl), title: 'DeckFAQs tab' }]
+            : [];
+        return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: () => Promise.resolve(tabs),
+        });
     }
-    const tabs = cef.currentUrl
-        ? [{ url: cefEncode(cef.currentUrl), title: 'DeckFAQs tab' }]
-        : [];
-    return Promise.resolve({ ok: true, json: () => Promise.resolve(tabs) });
+    const qs = QS_URL.exec(url);
+    if (qs) {
+        const kw = decodeURIComponent(qs[1] ?? '');
+        cef.qsRequests.push(kw);
+        if (cef.offline.has('cdn.staticneo.com')) {
+            return Promise.reject(new Error('offline'));
+        }
+        return Promise.resolve({
+            ok: true,
+            status: 200,
+            text: () => Promise.resolve(qsFor(kw)),
+        });
+    }
+    return Promise.resolve({ ok: false, status: 404 });
 });
 
 cef.executeInTab.mockImplementation(
@@ -174,12 +208,18 @@ type Option = { data?: unknown; label?: React.ReactNode; options?: Option[] };
 const flattenOptions = (opts: Option[]): Option[] =>
     opts.flatMap((o) => (o.options ? flattenOptions(o.options) : [o]));
 
-const Dropdown = ({ rgOptions, selectedOption, onChange }: Props) => {
+const Dropdown = ({
+    rgOptions,
+    selectedOption,
+    onChange,
+    menuLabel,
+    strDefaultLabel,
+}: Props) => {
     const flat = flattenOptions((rgOptions as Option[]) ?? []);
     return React.createElement(
         'select',
         {
-            'aria-label': 'TOC',
+            'aria-label': (menuLabel ?? strDefaultLabel ?? 'TOC') as string,
             value: (selectedOption as string | undefined) ?? '',
             onChange: (e: React.ChangeEvent<HTMLSelectElement>) => {
                 const picked = flat.find(
@@ -200,6 +240,29 @@ const Dropdown = ({ rgOptions, selectedOption, onChange }: Props) => {
         ]
     );
 };
+
+/** DropdownItem = a labelled Dropdown; label doubles as the accessible name. */
+const DropdownItem = ({ rgOptions, selectedOption, onChange, label }: Props) =>
+    React.createElement(
+        'select',
+        {
+            'aria-label': label as string,
+            value: (selectedOption as string | undefined) ?? '',
+            onChange: (e: React.ChangeEvent<HTMLSelectElement>) => {
+                const picked = ((rgOptions as Option[]) ?? []).find(
+                    (o) => String(o.data) === e.target.value
+                );
+                if (picked) (onChange as Fn)(picked);
+            },
+        },
+        ((rgOptions as Option[]) ?? []).map((o) =>
+            React.createElement(
+                'option',
+                { key: String(o.data), value: String(o.data) },
+                o.label
+            )
+        )
+    );
 
 const ToggleField = ({ label, checked, onChange }: Props) =>
     React.createElement(
@@ -283,6 +346,7 @@ const DFL = {
     DialogBody: passthrough('div'),
     DialogFooter: passthrough('div'),
     Dropdown,
+    DropdownItem,
     ToggleField,
     TextField,
     showModal,
