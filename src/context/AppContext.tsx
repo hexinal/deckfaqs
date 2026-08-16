@@ -39,6 +39,8 @@ export type TAppState = {
     runningGame?: string;
     darkMode: boolean;
     isLoading: boolean;
+    /** Message of the last failed fetch, shown with a Retry button. */
+    error?: string;
     currentGuide?: GuideContents;
     search: GuideSearch;
     browserView?: BrowserView;
@@ -59,6 +61,7 @@ export const initialState: TAppState = {
     currentGuide: undefined,
     darkMode: false,
     isLoading: false,
+    error: undefined,
     search: initSearchState,
     browserView: undefined,
 };

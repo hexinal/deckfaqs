@@ -7,6 +7,10 @@ import { AppContextProvider } from './context/AppContext';
 export default definePlugin(() => {
     const windowRouter = Router.WindowStore?.GamepadUIMainWindowInstance;
     const browserView = windowRouter?.CreateBrowserView('DeckFAQs');
+    if (!browserView) {
+        // Every fetch will surface ERROR_NO_BROWSER_VIEW; log once for the journal.
+        console.error('[DeckFAQs] could not create a BrowserView');
+    }
     return {
         name: 'DeckFAQs',
         titleView: <div className={staticClasses.Title}>DeckFAQs</div>,

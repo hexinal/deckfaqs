@@ -1,5 +1,6 @@
 import { useContext } from 'react';
 import { AppContext } from '../../context/AppContext';
+import { ErrorMessage } from '../ErrorMessage';
 import { ListElement } from './ListElement';
 
 export type ListItem = {
@@ -15,8 +16,9 @@ export type ListProps = {
 
 export const List = ({ data, header, handleClick }: ListProps) => {
     const {
-        state: { isLoading },
+        state: { isLoading, error },
     } = useContext(AppContext);
+    if (error) return <ErrorMessage />;
     return isLoading ? (
         <div className="lds-ring">
             <div></div>
