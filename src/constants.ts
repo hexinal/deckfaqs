@@ -1,6 +1,9 @@
 const faqsNightmareRegex =
     /(\/faqs\/\d+)">(.*?)<\/a>[\S\n\t ]*?(rec)?">\n.*(v\.[^,]*).*title="(.*)"/gm;
 
+// The only origin the hidden BrowserView is allowed to load (see utils.ts scrapeUrl).
+const GAMEFAQS_ORIGIN = 'https://gamefaqs.gamespot.com';
+
 const ignoreSteam = [1887720, 1070560, 1391110, 228980];
 const ignoreNonSteam = [
     'EmulationStation-DE-x64_SteamDeck',
@@ -26,4 +29,4 @@ const ignoreNonSteam = [
     'MAME',
 ];
 
-export { ignoreSteam, ignoreNonSteam, faqsNightmareRegex };
+export { GAMEFAQS_ORIGIN, ignoreSteam, ignoreNonSteam, faqsNightmareRegex };

@@ -3,6 +3,7 @@ import DOMPurify from 'dompurify';
 import type { Dispatch } from 'react';
 import { SearchResult } from './components/List/GameList';
 import { ListItem } from './components/List/List';
+import { GAMEFAQS_ORIGIN } from './constants';
 import type { BrowserView, TableOfContentEntry } from './context/AppContext';
 import { ActionType, AppActions } from './reducers/AppReducer';
 
@@ -60,6 +61,14 @@ const BLANK_PAGE = 'data:text/html,<body><%2Fbody>';
 
 type CefTab = { url: string; title: string };
 
+const isGameFaqsUrl = (url: string): boolean => {
+    try {
+        return new URL(url).origin === GAMEFAQS_ORIGIN;
+    } catch {
+        return false;
+    }
+};
+
 // Lists the tabs of Steam's CEF instance via its remote-debugging endpoint.
 const getDebuggerTabs = async (): Promise<CefTab[]> => {
     try {
@@ -92,6 +101,11 @@ const scrapeUrl = async (
     let result = '';
     if (!browserView) {
         console.warn('[DeckFAQs] no BrowserView available');
+        return result;
+    }
+    // The BrowserView shares Steam's CEF profile: only ever point it at GameFAQs.
+    if (!isGameFaqsUrl(url)) {
+        console.warn(`[DeckFAQs] refusing to load off-origin URL ${url}`);
         return result;
     }
     // CEF reports the loaded URL percent-encoded (including apostrophes);
@@ -147,9 +161,9 @@ export const gameSearch = async (
     browserView: BrowserView | undefined,
     dispatch: Dispatch<AppActions>
 ) => {
-    game = game.trim().replace(/\s+/g, '+');
-    const searchUrl = `https://gamefaqs.gamespot.com/ajax/home_game_search?term=${game}`;
-    const home = 'https://gamefaqs.gamespot.com';
+    const term = encodeURIComponent(game.trim()).replace(/%20/g, '+');
+    const searchUrl = `${GAMEFAQS_ORIGIN}/ajax/home_game_search?term=${term}`;
+    const home = GAMEFAQS_ORIGIN;
     dispatch({
         type: ActionType.UPDATE_PLUGIN_STATE,
         payload: { pluginState: 'results', isLoading: true },

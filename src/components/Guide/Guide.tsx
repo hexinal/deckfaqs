@@ -20,6 +20,7 @@ import parse, {
 } from 'html-react-parser';
 import { ActionType } from '../../reducers/AppReducer';
 import { getGuideHtml } from '../../utils';
+import { GAMEFAQS_ORIGIN } from '../../constants';
 import { TocDropdown } from '../Nav/TocDropdown';
 import { Search } from '../Nav/Search';
 import { ScrollPanel } from '../ScrollPanel';
@@ -124,12 +125,16 @@ export const Guide = ({ fullscreen }: GuideProps) => {
                     domNode.attribs &&
                     domNode.attribs.src
                 ) {
-                    return (
-                        <img
-                            {...domNode.attribs}
-                            src={`https://gamefaqs.gamespot.com${domNode.attribs.src}`}
-                        />
-                    );
+                    // Resolve relative image paths against GameFAQs; drop anything off-origin.
+                    let src: string;
+                    try {
+                        src = new URL(domNode.attribs.src, GAMEFAQS_ORIGIN)
+                            .href;
+                    } catch {
+                        return <></>;
+                    }
+                    if (!src.startsWith(`${GAMEFAQS_ORIGIN}/`)) return <></>;
+                    return <img {...domNode.attribs} src={src} />;
                 }
                 return domNode;
             },
@@ -152,9 +157,12 @@ export const Guide = ({ fullscreen }: GuideProps) => {
     const scrollToAnchor = useCallback(
         (anchor: string = '') => {
             if (anchor.length > 0) {
+                // Anchors come from guide markup; escape so odd characters can't
+                // break the selector and throw.
+                const escaped = CSS.escape(anchor);
                 const elementToScrollTo =
-                    guideDiv.current?.querySelector(`[name="${anchor}"]`) ??
-                    guideDiv.current?.querySelector(`[id="${anchor}"]`);
+                    guideDiv.current?.querySelector(`[name="${escaped}"]`) ??
+                    guideDiv.current?.querySelector(`[id="${escaped}"]`);
                 if (elementToScrollTo) {
                     elementToScrollTo.scrollIntoView();
                 } else {
