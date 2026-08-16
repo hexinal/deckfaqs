@@ -216,6 +216,33 @@ describe('DeckFAQs bundle', () => {
         );
     });
 
+    it('lists Neoseeker walkthroughs, FAQs and maps by category', async () => {
+        openPanel();
+        await searchGame('chrono trigger');
+        clickButton(/^Chrono Trigger$/);
+        await screen.findByText('Guides');
+        // Loaded with the trailing slash (the site redirects /faqs, which the
+        // exact CEF tab match could not follow).
+        expect(cef.loadUrl).toHaveBeenCalledWith(
+            'https://www.neoseeker.com/chrono-trigger/faqs/'
+        );
+        const rows = (await screen.findAllByRole('button'))
+            .map((b) => b.textContent ?? '')
+            .filter((t) => /\d{4}$/.test(t));
+        expect(rows).toContain(
+            '(Import) FAQ/Walkthrough Final (PSX) - Feb 16, 2001'
+        );
+        expect(rows).toContain('FAQ/Walkthrough (PSX) - v1.01 - May 24, 2006');
+        expect(rows.some((r) => /2D Map|Map \(/.test(r))).toBe(true);
+        expect(rows.some((r) => /Spanish/.test(r))).toBe(true);
+        expect(rows.some((r) => /StrategyWiki/.test(r))).toBe(false);
+        expect(screen.getByText('General FAQs/Guides')).toBeInTheDocument();
+        expect(screen.getByText('Maps FAQs/Guides')).toBeInTheDocument();
+        expect(
+            screen.getByText('Non-English Walkthroughs & FAQs')
+        ).toBeInTheDocument();
+    });
+
     it('extracts the guide list from the real /faqs page', async () => {
         openPanel();
         await openGuideList();

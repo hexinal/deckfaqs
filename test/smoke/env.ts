@@ -38,6 +38,10 @@ const pages: Record<string, () => string> = {
         fixture('faqs-final-fantasy-x.html'),
     'gamefaqs.gamespot.com/ps2/197344-final-fantasy-x/faqs/69037': () =>
         fixture('guide-ffx-69037.html'),
+    'www.neoseeker.com/chrono-trigger/faqs': () =>
+        fixture('neoseeker/faqs-chrono-trigger.html'),
+    'www.neoseeker.com/dragon-quest-xi/faqs': () =>
+        fixture('neoseeker/faqs-dragon-quest-xi.html'),
 };
 
 // Neoseeker's quick-search: static JSONP on its CDN, fetched with fetchNoCors

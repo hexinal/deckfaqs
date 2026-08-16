@@ -5,6 +5,7 @@ import {
     getGuideCode,
     getGamesCode,
 } from '../src/sources/gamefaqs';
+import { neoGuidesCode } from '../src/sources/neoseeker';
 
 // The extraction scripts run inside the GameFAQs tab via executeInTab and
 // return the value of their last expression; mimic that with an indirect eval
@@ -102,5 +103,94 @@ describe('getGamesCode (search endpoint)', () => {
         expect(
             runInPage(getGamesCode, '<html><body>Just a moment</body></html>')
         ).toBe('');
+    });
+});
+
+describe('neoGuidesCode (Neoseeker /<slug>/faqs/ page)', () => {
+    const run = (name: string) => {
+        const raw = runInPage(neoGuidesCode, fixture(`neoseeker/${name}`));
+        return JSON.parse(raw as string) as Array<Record<string, string>>;
+    };
+
+    it('lists the wiki walkthrough, FAQs and map images with their metadata', () => {
+        const entries = run('faqs-dragon-quest-xi.html');
+        expect(entries.map((e) => e.kind)).toEqual([
+            'walkthrough',
+            'faq',
+            'faq',
+            ...Array<string>(6).fill('image'),
+        ]);
+        expect(entries[0]).toEqual({
+            kind: 'walkthrough',
+            href: 'https://www.neoseeker.com/dragon-quest-xi/walkthrough',
+            title: 'Walkthrough',
+            category: 'General FAQs/Guides',
+            platform: 'PS4',
+            author: 'MasterJG',
+            date: 'Sep 4, 2018',
+            size: '',
+            version: '',
+        });
+        expect(entries[1]).toMatchObject({
+            kind: 'faq',
+            href: 'https://www.neoseeker.com/dragon-quest-xi/faqs/3043257-bestiary.html',
+            title: 'Bestiary',
+            category: 'Topic Specific FAQs/Guides',
+            author: 'Jadebell',
+            date: 'Sep 27, 2019',
+            size: '1,929.4 kb',
+            version: '0.4',
+        });
+        // Map images: the full-size file is the thumbnail without `_thumb`.
+        expect(entries[3]).toMatchObject({
+            kind: 'image',
+            href: 'https://faqs.neoseeker.com/Games/Switch/dragon_quest_xi_s_octagonia_caverns_2d_01.jpg',
+            category: 'Maps FAQs/Guides',
+            author: 'stahlbaum',
+            version: '1.0',
+        });
+        expect(entries[3]!.title).toMatch(
+            /Caverns Under Octagonia Part 1 2D Map/
+        );
+    });
+
+    it('walks every table, drops external rows and keeps blank versions', () => {
+        const entries = run('faqs-chrono-trigger.html');
+        expect(entries.some((e) => e.href?.includes('strategywiki'))).toBe(
+            false
+        );
+        expect(entries.filter((e) => e.kind === 'image')).toHaveLength(3);
+        // The "Non-English" table is a second table.table-list on the page.
+        const spanish = entries.filter((e) => /Spanish/.test(e.title ?? ''));
+        expect(spanish).toHaveLength(4);
+        expect(spanish[0]).toMatchObject({
+            href: 'https://www.neoseeker.com/chrono-trigger/faqs/33554-spanish.html',
+            category: 'Non-English Walkthroughs & FAQs',
+            platform: 'PSX',
+            author: 'Lord Zero',
+            date: 'Apr 20, 2001',
+            version: '1.2',
+        });
+        expect(entries[0]).toMatchObject({
+            title: '(Import) FAQ/Walkthrough Final',
+            version: '',
+            date: 'Feb 16, 2001',
+        });
+        expect(new Set(entries.map((e) => e.category)).size).toBeGreaterThan(5);
+    });
+
+    it('keeps polling until the page is complete, then reports empty lists', () => {
+        expect(
+            runInPage(neoGuidesCode, '<html><body><h1>FAQs</h1></body></html>')
+        ).toBeUndefined();
+        expect(
+            runInPage(neoGuidesCode, '<title>Just a moment...</title>')
+        ).toBeUndefined();
+        expect(
+            runInPage(
+                neoGuidesCode,
+                '<h1>Walkthroughs, FAQs, Guides and Maps</h1><footer id="footer"></footer>'
+            )
+        ).toBe('[]');
     });
 });

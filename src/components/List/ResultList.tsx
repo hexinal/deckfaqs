@@ -4,7 +4,8 @@ import { AppContext } from '../../context/AppContext';
 import { ActionType } from '../../reducers/AppReducer';
 import { gameSearch, getContent, request } from '../../utils';
 import { getGuidesCode, parseGuideList } from '../../sources/gamefaqs';
-import { guideListUrl } from '../../sources/source';
+import { neoGuidesCode, parseNeoGuideList } from '../../sources/neoseeker';
+import { guideListUrl, sourceOf } from '../../sources/source';
 import { List } from './List';
 
 export const ResultList = () => {
@@ -30,12 +31,21 @@ export const ResultList = () => {
                         type: ActionType.UPDATE_PLUGIN_STATE,
                         payload: { pluginState: 'guides', isLoading: true },
                     });
-                    return getContent(guideListUrl(url), ctx, getGuidesCode);
+                    return getContent(
+                        guideListUrl(url),
+                        ctx,
+                        sourceOf(url) === 'neoseeker'
+                            ? neoGuidesCode
+                            : getGuidesCode
+                    );
                 },
                 (raw) => {
                     dispatch({
                         type: ActionType.UPDATE_GUIDES,
-                        payload: parseGuideList(raw),
+                        payload:
+                            sourceOf(url) === 'neoseeker'
+                                ? parseNeoGuideList(raw, url)
+                                : parseGuideList(raw),
                     });
                 }
             );

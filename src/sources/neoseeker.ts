@@ -143,3 +143,149 @@ export const neoGameSearch = async (
     }
     return [];
 };
+
+// ---------------------------------------------------------------------------
+// Guide list: runs in a game's /<slug>/faqs/ page. Rows are the wiki
+// walkthrough, user-submitted FAQs and map images (thumb URL minus `_thumb`
+// is the full-size image); external rows (StrategyWiki) are dropped.
+// Contract: undefined while the page (or Cloudflare's check) is still loading
+// — the footer is the last element of a real page — else a JSON array of
+// {kind, href, title, category, platform, author, date, size, version}.
+// ---------------------------------------------------------------------------
+export const neoGuidesCode = `function get_neo_guides() {
+    if (!document.getElementById('footer')) return undefined;
+    const clean = (s) => (s || '').replace(/\\s+/g, ' ').trim();
+    const out = [];
+    for (const table of document.querySelectorAll('table.table-list')) {
+      // A secondary table ("Non-English Walkthroughs & FAQs") is introduced by
+      // an <h2>; use that as the category instead of its repeated dividers.
+      const prev = table.previousElementSibling;
+      const section = prev && prev.tagName === 'H2' ? clean(prev.textContent) : '';
+      let category = section;
+      for (const tr of table.querySelectorAll('tr')) {
+        if (tr.classList.contains('table-divider')) {
+            if (!section) category = clean(tr.textContent);
+            continue;
+        }
+        const cells = Array.prototype.filter.call(tr.children, (c) => c.tagName === 'TD');
+        if (cells.length < 2) continue;
+        const first = cells[0];
+        let kind = 'faq';
+        let href = '';
+        let title = '';
+        const img = first.querySelector('a.image_faq img');
+        if (img) {
+            kind = 'image';
+            href = (img.getAttribute('src') || '').replace(/_thumb(\\.[a-z0-9]+)$/i, '$1');
+            const label = first.querySelector('a:not(.image_faq)');
+            title = clean((label && label.textContent) || img.getAttribute('alt'));
+        } else {
+            const a = first.querySelector('a[href]');
+            if (!a) continue;
+            let u;
+            try {
+                u = new URL(a.getAttribute('href') || '', location.href);
+            } catch (e) {
+                continue;
+            }
+            if (u.hostname !== 'www.neoseeker.com') continue;
+            if (/\\/walkthrough\\/?$/.test(u.pathname)) kind = 'walkthrough';
+            else if (!/\\/faqs\\/\\d+/.test(u.pathname)) continue;
+            href = u.href;
+            title = clean(a.textContent);
+        }
+        const small = first.querySelector('small');
+        const platform = small ? clean(small.textContent).replace(/^\\(|\\)$/g, '') : '';
+        const dateNode = cells[1].firstChild;
+        const date = clean(dateNode && dateNode.nodeType === 3 ? dateNode.textContent : cells[1].textContent);
+        const text = (i) => (cells[i] ? clean(cells[i].textContent) : '');
+        out.push({
+            kind,
+            href,
+            title,
+            category,
+            platform,
+            author: text(2),
+            date,
+            size: text(3),
+            version: text(4),
+        });
+      }
+    }
+    return JSON.stringify(out);
+}
+get_neo_guides()`;
+
+type NeoGuideEntry = {
+    kind: 'walkthrough' | 'faq' | 'image';
+    href: string;
+    title: string;
+    category: string;
+    platform: string;
+    author: string;
+    date: string;
+    size: string;
+    version: string;
+};
+
+// Map images live on these file hosts; anything there opens as an image guide.
+const NEO_FILE_HOSTS = new Set(['faqs.neoseeker.com', 'i.neoseeker.com']);
+
+/** A Neoseeker map/image guide (rendered as a single <img>, nothing to scrape). */
+export const isNeoImageUrl = (url: string): boolean => {
+    try {
+        return NEO_FILE_HOSTS.has(new URL(url).hostname);
+    } catch {
+        return false;
+    }
+};
+
+/**
+ * Turns the JSON emitted by neoGuidesCode into list items grouped by the
+ * page's categories. `gameUrl` is the search hit that led here: when it is
+ * the wiki walkthrough itself but the list has no such row, one is added.
+ */
+export const parseNeoGuideList = (raw: string, gameUrl: string): ListItem[] => {
+    let entries: unknown;
+    try {
+        entries = raw ? JSON.parse(raw) : [];
+    } catch (e) {
+        console.error('[DeckFAQs] unexpected Neoseeker guide list payload', e);
+        throw new Error(badPayloadError('neoseeker'), { cause: e });
+    }
+    if (!Array.isArray(entries)) return [];
+    const items: ListItem[] = [];
+    let hasWalkthrough = false;
+    for (const entry of entries as Partial<NeoGuideEntry>[]) {
+        if (!entry?.href || !entry.title) continue;
+        let url: URL;
+        try {
+            url = new URL(entry.href);
+        } catch {
+            continue;
+        }
+        if (
+            url.origin !== NEOSEEKER_ORIGIN &&
+            !NEO_FILE_HOSTS.has(url.hostname)
+        )
+            continue;
+        if (entry.kind === 'walkthrough') hasWalkthrough = true;
+        const version = entry.version
+            ? /^\d/.test(entry.version)
+                ? `v${entry.version}`
+                : entry.version
+            : '';
+        const text = [
+            entry.title + (entry.platform ? ` (${entry.platform})` : ''),
+            version,
+            entry.date,
+        ]
+            .filter(Boolean)
+            .join(' - ');
+        items.push({ text, url: url.href, group: entry.category || undefined });
+    }
+    if (!hasWalkthrough && /\/walkthrough\/?$/.test(gameUrl)) {
+        items.unshift({ text: 'Walkthrough', url: gameUrl });
+    }
+    return items;
+};
