@@ -59,14 +59,28 @@ const MAX_POLLING = 100;
 const CEF_TABS_URL = 'http://localhost:8080/json';
 const BLANK_PAGE = 'data:text/html,<body><%2Fbody>';
 
+export const ERROR_NO_BROWSER_VIEW =
+    "Steam's browser view is unavailable. Restart Steam and try again.";
+export const ERROR_UNREACHABLE =
+    "Couldn't load GameFAQs. Check the connection and retry.";
+export const ERROR_BAD_PAYLOAD =
+    'GameFAQs returned something unexpected. Retry, or update DeckFAQs if it keeps happening.';
+
 type CefTab = { url: string; title: string };
 
-const isGameFaqsUrl = (url: string): boolean => {
+export const isGameFaqsUrl = (url: string): boolean => {
     try {
         return new URL(url).origin === GAMEFAQS_ORIGIN;
     } catch {
         return false;
     }
+};
+
+// CEF reports the loaded URL percent-encoded (including apostrophes);
+// don't re-encode URLs that already contain escapes.
+export const toCefTabUrl = (url: string): string => {
+    const alreadyEncoded = /%[0-9a-f]{2}/i.test(url);
+    return (alreadyEncoded ? url : encodeURI(url)).replace(/'/g, '%27');
 };
 
 // Lists the tabs of Steam's CEF instance via its remote-debugging endpoint.
@@ -92,120 +106,199 @@ const runInTab = async (title: string, code: string): Promise<string> => {
     }
 };
 
-// Loads `url` in the hidden BrowserView, waits for its tab to appear, then runs `code` in it.
-const scrapeUrl = async (
+// ---------------------------------------------------------------------------
+// Request bookkeeping: "latest wins". Every user-initiated fetch goes through
+// request(); a newer request (or Back, via cancelPendingRequests) supersedes
+// older ones so their late results can't yank the UI forward again.
+// ---------------------------------------------------------------------------
+
+export type RequestContext = {
+    browserView?: BrowserView;
+    /** True once a newer request has started (or Back was pressed). */
+    cancelled: () => boolean;
+};
+
+type RequestDeps = {
+    browserView?: BrowserView;
+    dispatch: Dispatch<AppActions>;
+};
+
+let latestRequest = 0;
+let lastRequest: (() => void) | undefined;
+
+/** Drop the results of any in-flight request (e.g. when navigating Back). */
+export const cancelPendingRequests = () => {
+    latestRequest++;
+    lastRequest = undefined;
+};
+
+/** Re-run the most recent request (used by the error/retry UI). */
+export const retryLastRequest = () => {
+    lastRequest?.();
+};
+
+/**
+ * Runs `run` as the newest request. `run` is invoked synchronously (so it can
+ * dispatch a loading state first); `onResult` only fires if no newer request
+ * started meanwhile. Errors surface as UPDATE_ERROR under the same rule.
+ */
+export const request = <T>(
+    { browserView, dispatch }: RequestDeps,
+    run: (ctx: RequestContext) => Promise<T>,
+    onResult: (result: T) => void
+): void => {
+    const id = ++latestRequest;
+    const ctx: RequestContext = {
+        browserView,
+        cancelled: () => id !== latestRequest,
+    };
+    lastRequest = () => request({ browserView, dispatch }, run, onResult);
+    run(ctx)
+        .then((result) => {
+            if (!ctx.cancelled()) onResult(result);
+        })
+        .catch((e: unknown) => {
+            if (ctx.cancelled()) return;
+            console.error('[DeckFAQs] request failed', e);
+            dispatch({
+                type: ActionType.UPDATE_ERROR,
+                payload: e instanceof Error ? e.message : ERROR_UNREACHABLE,
+            });
+        });
+};
+
+// ---------------------------------------------------------------------------
+// Scraping through the hidden BrowserView. There is exactly one view, so
+// scrapes are serialised through `scrapeQueue`; a cancelled request gives the
+// view up early instead of polling for the full MAX_POLLING window.
+// ---------------------------------------------------------------------------
+
+let scrapeQueue: Promise<unknown> = Promise.resolve();
+
+// Loads `url` in the hidden BrowserView, waits for its tab to appear, then runs
+// `code` in it. Resolves '' if the request was cancelled; throws on failure.
+const doScrape = async (
     url: string,
-    browserView: BrowserView | undefined,
+    { browserView, cancelled }: RequestContext,
     code: string
 ): Promise<string> => {
-    let result = '';
-    if (!browserView) {
-        console.warn('[DeckFAQs] no BrowserView available');
-        return result;
-    }
+    if (cancelled()) return '';
+    if (!browserView) throw new Error(ERROR_NO_BROWSER_VIEW);
     // The BrowserView shares Steam's CEF profile: only ever point it at GameFAQs.
     if (!isGameFaqsUrl(url)) {
-        console.warn(`[DeckFAQs] refusing to load off-origin URL ${url}`);
-        return result;
+        throw new Error(`Refusing to load off-origin URL ${url}`);
     }
-    // CEF reports the loaded URL percent-encoded (including apostrophes);
-    // don't re-encode URLs that already contain escapes.
-    const alreadyEncoded = /%[0-9a-f]{2}/i.test(url);
-    const tabUrl = (alreadyEncoded ? url : encodeURI(url)).replace(/'/g, '%27');
+    const tabUrl = toCefTabUrl(url);
+    let result = '';
     browserView.LoadURL(url);
-    let maxPolling = 0;
-    while (maxPolling < MAX_POLLING) {
-        maxPolling++;
-        const tab = (await getDebuggerTabs()).find((t) => t.url === tabUrl);
-        if (tab?.title) result = await runInTab(tab.title, code);
-        if (result) break;
-        await delay(100);
+    try {
+        for (let i = 0; i < MAX_POLLING && !cancelled(); i++) {
+            const tab = (await getDebuggerTabs()).find((t) => t.url === tabUrl);
+            if (tab?.title) result = await runInTab(tab.title, code);
+            if (result) break;
+            await delay(100);
+        }
+    } finally {
+        browserView.LoadURL(BLANK_PAGE);
     }
-    if (!result) console.warn(`[DeckFAQs] no content retrieved for ${url}`);
-    browserView.LoadURL(BLANK_PAGE);
+    if (!result && !cancelled()) {
+        console.warn(`[DeckFAQs] no content retrieved for ${url}`);
+        throw new Error(ERROR_UNREACHABLE);
+    }
     return result;
 };
 
-export const getContent = async (
+const scrapeUrl = (
     url: string,
-    browserView: BrowserView | undefined,
-    code: string,
-    handleResult: (result: string) => void
-) => {
-    const htmlResult = await scrapeUrl(url, browserView, code);
-    handleResult(htmlResult);
+    ctx: RequestContext,
+    code: string
+): Promise<string> => {
+    const run = scrapeQueue.then(() => doScrape(url, ctx, code));
+    scrapeQueue = run.catch(() => undefined);
+    return run;
 };
 
+/** Raw string result of running `code` in the loaded page. */
+export const getContent = (
+    url: string,
+    ctx: RequestContext,
+    code: string
+): Promise<string> => scrapeUrl(url, ctx, code);
+
+export type GuidePage = { html: string; toc: TableOfContentEntry[] };
+
+/** Sanitised guide HTML plus its table of contents. */
 export const getGuideHtml = async (
     url: string,
-    browserView: BrowserView | undefined,
-    handleResult: (result: string, toc: TableOfContentEntry[]) => void
-) => {
-    let htmlResult = '';
-    let toc: TableOfContentEntry[] = [];
-    const raw = await scrapeUrl(url, browserView, getGuideCode);
-    if (raw) {
-        try {
-            const htmlBody = JSON.parse(raw);
-            htmlResult = DOMPurify.sanitize(htmlBody.guide ?? '');
-            toc = htmlBody.toc;
-        } catch (e) {
-            console.error('[DeckFAQs] failed to parse guide payload', e);
-        }
+    ctx: RequestContext
+): Promise<GuidePage> => {
+    const raw = await scrapeUrl(url, ctx, getGuideCode);
+    if (!raw) return { html: '', toc: [] };
+    try {
+        const body = JSON.parse(raw) as { guide?: string; toc?: unknown };
+        return {
+            html: DOMPurify.sanitize(body.guide ?? ''),
+            toc: Array.isArray(body.toc)
+                ? (body.toc as TableOfContentEntry[])
+                : [],
+        };
+    } catch (e) {
+        console.error('[DeckFAQs] failed to parse guide payload', e);
+        throw new Error(ERROR_BAD_PAYLOAD, { cause: e });
     }
-    handleResult(htmlResult, toc);
 };
 
-export const gameSearch = async (
+// Only report the page once it actually holds the JSON search payload;
+// anything else (still loading, Cloudflare interstitial, ...) keeps
+// the caller polling until MAX_POLLING is reached.
+const getGamesCode = `function get_games() {
+    const text = document.documentElement?.innerText ?? '';
+    try {
+        JSON.parse(text);
+        return text;
+    } catch (e) {
+        return '';
+    }
+}
+get_games()`;
+
+/** Turns the raw GameFAQs search payload into list items. */
+export const parseSearchResults = (raw: string): ListItem[] => {
+    let results: unknown;
+    try {
+        results = raw ? JSON.parse(raw) : [];
+    } catch (e) {
+        console.error('[DeckFAQs] unexpected search response', e);
+        throw new Error(ERROR_BAD_PAYLOAD, { cause: e });
+    }
+    if (!Array.isArray(results)) return [];
+    return (results as SearchResult[]).flatMap((r) =>
+        r.product_name && r.url
+            ? [{ text: `${r.product_name}`, url: `${GAMEFAQS_ORIGIN}${r.url}` }]
+            : []
+    );
+};
+
+export const gameSearch = (
     game: string,
     browserView: BrowserView | undefined,
     dispatch: Dispatch<AppActions>
 ) => {
     const term = encodeURIComponent(game.trim()).replace(/%20/g, '+');
     const searchUrl = `${GAMEFAQS_ORIGIN}/ajax/home_game_search?term=${term}`;
-    const home = GAMEFAQS_ORIGIN;
-    dispatch({
-        type: ActionType.UPDATE_PLUGIN_STATE,
-        payload: { pluginState: 'results', isLoading: true },
-    });
-    getContent(
-        searchUrl,
-        browserView,
-        // Only report the page once it actually holds the JSON search payload;
-        // anything else (still loading, Cloudflare interstitial, ...) keeps
-        // the caller polling until MAX_POLLING is reached.
-        `function get_games() {
-            const text = document.documentElement?.innerText ?? '';
-            try {
-                JSON.parse(text);
-                return text;
-            } catch (e) {
-                return '';
-            }
-        }
-    get_games()`,
-        (result: string) => {
-            const searchResults: ListItem[] = [];
-            let results: SearchResult[] = [];
-            try {
-                if (result) results = JSON.parse(result);
-            } catch (e) {
-                console.error('[DeckFAQs] unexpected search response', e);
-            }
-            if (Array.isArray(results)) {
-                results.forEach((result) => {
-                    if (result.product_name) {
-                        const url = `${home}${result.url}`;
-                        searchResults.push({
-                            text: `${result.product_name}`,
-                            url: url,
-                        });
-                    }
-                });
-            }
+    request(
+        { browserView, dispatch },
+        (ctx) => {
+            dispatch({
+                type: ActionType.UPDATE_PLUGIN_STATE,
+                payload: { pluginState: 'results', isLoading: true },
+            });
+            return getContent(searchUrl, ctx, getGamesCode);
+        },
+        (raw) => {
             dispatch({
                 type: ActionType.UPDATE_RESULTS,
-                payload: searchResults,
+                payload: parseSearchResults(raw),
             });
         }
     );

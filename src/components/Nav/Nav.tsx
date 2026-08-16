@@ -11,10 +11,15 @@ import { useCallback, useContext, useMemo } from 'react';
 import { BsArrowsFullscreen } from 'react-icons/bs';
 import { FaHome } from 'react-icons/fa';
 import { FiRotateCw } from 'react-icons/fi';
-import { AppContext, TableOfContentEntry } from '../../context/AppContext';
+import { AppContext } from '../../context/AppContext';
 import { SETTINGS } from '../../constants';
 import { ActionType } from '../../reducers/AppReducer';
-import { gameSearch, getGuideHtml } from '../../utils';
+import {
+    cancelPendingRequests,
+    gameSearch,
+    getGuideHtml,
+    request,
+} from '../../utils';
 import { Search } from './Search';
 import { SearchModal } from './SearchModal';
 import { TocDropdown } from './TocDropdown';
@@ -35,20 +40,26 @@ export const Nav = () => {
     const hasToc = (currentGuide?.guideToc?.length ?? 0) > 0;
 
     const back = useCallback(() => {
+        cancelPendingRequests();
         dispatch({ type: ActionType.BACK });
     }, [dispatch]);
 
     const reload = useCallback(() => {
         if (guideUrl) {
-            dispatch({ type: ActionType.UPDATE_LOADING, payload: true });
-            getGuideHtml(
-                guideUrl,
-                browserView,
-                (result: string, toc: Array<TableOfContentEntry>) => {
+            request(
+                { browserView, dispatch },
+                (ctx) => {
+                    dispatch({
+                        type: ActionType.UPDATE_LOADING,
+                        payload: true,
+                    });
+                    return getGuideHtml(guideUrl, ctx);
+                },
+                ({ html, toc }) => {
                     dispatch({
                         type: ActionType.UPDATE_GUIDE,
                         payload: {
-                            guideHtml: result,
+                            guideHtml: html,
                             guideUrl,
                             guideToc: toc,
                         },
@@ -59,6 +70,7 @@ export const Nav = () => {
     }, [guideUrl, browserView, dispatch]);
 
     const backToGames = useCallback(() => {
+        cancelPendingRequests();
         dispatch({ type: ActionType.BACK_TO_STATE, payload: 'games' });
     }, [dispatch]);
 
