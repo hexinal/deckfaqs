@@ -15,6 +15,7 @@ pnpm build            # bundle src/index.tsx -> dist/index.js
 pnpm typecheck        # tsc --noEmit
 pnpm lint             # eslint .            (lint:fix to auto-fix)
 pnpm test             # vitest run           (test:watch for watch mode)
+pnpm knip             # unused files/exports/dependencies (knip.json)
 pnpm format           # prettier --write .   (format:check in CI)
 pnpm package          # build output -> deckfaqs.zip / deckfaqs.tar.gz (or: task package)
 ```
@@ -40,11 +41,11 @@ Never bump `package.json` by hand — the bot commits `chore(release): x.y.z [sk
 
 Commit messages are linted with [commitlint](https://commitlint.js.org) both locally (`.husky/commit-msg`) and in CI (`Lint commits` job); PR titles are linted as well because squash merges use the PR title as the commit message. `.husky/pre-commit` runs prettier on staged files. If you really need to skip the hooks once: `git commit --no-verify`.
 
-Dependency updates: for npm, Dependabot only opens **security** PRs here (`.github/dependabot.yml`); they use `fix(deps)`/`chore(deps)` prefixes so a vulnerable runtime dependency ships as a patch release while dev-dependency bumps don't. Regular npm version bumps are done by hand; `pnpm.minimumReleaseAge` in `package.json` makes pnpm skip versions published less than 3 days ago (supply-chain guard), so a brand-new release may need to wait or be pinned explicitly. GitHub Actions are pinned to commit SHAs in the workflows and Dependabot keeps those pins current (`ci(deps)`, no release). Releases attach a `SHA256SUMS` file (`scripts/install_plugin.sh` verifies against it) and a build-provenance attestation (`gh attestation verify deckfaqs.zip -R hexinal/deckfaqs`); PRs get a dependency review and CI runs `pnpm audit --prod`.
+Dependency updates: Dependabot opens security PRs plus one grouped minor/patch npm PR per month (majors individually; `.github/dependabot.yml`), with `fix(deps)`/`chore(deps)` prefixes so a runtime dependency bump ships as a patch release while dev-dependency bumps don't. Both Dependabot's `cooldown` and `pnpm.minimumReleaseAge` in `package.json` skip versions published less than 3 days ago (supply-chain guard), so a brand-new release may need to wait or be pinned explicitly. GitHub Actions are pinned to commit SHAs in the workflows and Dependabot keeps those pins current (`ci(deps)`, no release). Releases attach a `SHA256SUMS` file (`scripts/install_plugin.sh` verifies against it) and a build-provenance attestation (`gh attestation verify deckfaqs.zip -R hexinal/deckfaqs`); PRs get a dependency review and CI runs `pnpm audit --prod`.
 
 ## Pull requests
 
-- Branch off `main`, open a PR against `main`. CI runs format check, ESLint, type-check, tests, build and packaging; the built zip is available as a workflow artifact. Merging requires those checks to be green.
+- Branch off `main`, open a PR against `main`. CI runs format check, ESLint, type-check, tests, knip, build and packaging; the built zip is available as a workflow artifact. Merging requires those checks to be green.
 - ESLint (`eslint.config.js`: `@eslint/js` + `typescript-eslint` recommended-type-checked + `react-hooks`, prettier-compatible) must pass with zero warnings (`pnpm lint`); type-only imports must use `import type` (`verbatimModuleSyntax`), promises must be awaited or explicitly `void`ed. Props/APIs the Steam client has but `@decky/ui` doesn't declare go into `src/decky-ui.d.ts` instead of `@ts-ignore`.
 - Keep the code style: 4-space indent, single quotes, es5 trailing commas (`.prettierrc.json`, `.editorconfig`); CSS modules don't work under Decky's router, so styling is inline.
 - When GameFAQs markup changes, the in-tab extraction scripts in `src/utils.ts` (`getGuideCode`, `getGuidesCode`, `getGamesCode`) and their parsers (`parseGuideList`, `parseSearchResults`) are the usual suspects — update the fixture in `test/fixtures/` (save the page from a browser, strip `<script>` tags) so `test/extractors.test.ts` covers the new markup.
