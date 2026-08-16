@@ -42,7 +42,6 @@ export const Search = ({ fullScreen }: SearchProps) => {
     return (
         <>
             <DialogButton
-                //@ts-ignore
                 disableNavSounds={true}
                 style={{ ...childStyle, maxWidth: '32%', marginRight: '5px' }}
                 onClick={() => {
@@ -62,27 +61,26 @@ export const Search = ({ fullScreen }: SearchProps) => {
                 <BsSearch />
             </DialogButton>
             <DialogButton
-                //@ts-ignore
                 disableNavSounds={true}
                 style={{ ...childStyle, maxWidth: '10%', marginRight: '5px' }}
                 onClick={() => {
                     const anchorIndex = search.anchorIndex - 1;
-                    anchorIndex >= 0 &&
+                    if (anchorIndex >= 0) {
                         dispatch({
                             type: ActionType.UPDATE_SEARCH,
                             payload: { ...search, anchorIndex: anchorIndex },
                         });
+                    }
                 }}
             >
                 <BsArrowBarUp />
             </DialogButton>
             <DialogButton
-                //@ts-ignore
                 disableNavSounds={true}
                 style={{ ...childStyle, maxWidth: '10%' }}
                 onClick={() => {
                     const anchorIndex = search.anchorIndex + 1;
-                    anchorIndex < search.searchAnchorLength &&
+                    if (anchorIndex < search.searchAnchorLength) {
                         dispatch({
                             type: ActionType.UPDATE_SEARCH,
                             payload: {
@@ -90,6 +88,7 @@ export const Search = ({ fullScreen }: SearchProps) => {
                                 anchorIndex: anchorIndex,
                             },
                         });
+                    }
                 }}
             >
                 <BsArrowBarDown />

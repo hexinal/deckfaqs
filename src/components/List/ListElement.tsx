@@ -14,12 +14,11 @@ export const ListElement = ({
 }: ListElementProps) => {
     const handleClick = useCallback(() => {
         onClick(value);
-    }, [value]);
+    }, [onClick, value]);
 
     return (
         <PanelSectionRow>
             <ButtonItem
-                //@ts-ignore
                 disableNavSounds={true}
                 layout="below"
                 onClick={handleClick}
