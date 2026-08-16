@@ -1,3 +1,9 @@
+## [2.1.0](https://github.com/hexinal/deckfaqs/compare/v2.0.7...v2.1.0) (2026-08-16)
+
+### Features
+
+* remember the last reading position per guide ([#17](https://github.com/hexinal/deckfaqs/issues/17)) ([df4e8eb](https://github.com/hexinal/deckfaqs/commit/df4e8eb0115a3e84f24b9029b4718eccc50f124a))
+
 ## [2.0.7](https://github.com/hexinal/deckfaqs/compare/v2.0.6...v2.0.7) (2026-08-16)
 
 ### Refactoring
