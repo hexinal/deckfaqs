@@ -27,12 +27,17 @@ tasks:
     typecheck:
         desc: Type-check without emitting
         cmds:
-            - npx tsc --noEmit
+            - pnpm run typecheck
 
     format:
-        desc: Format sources with prettier
+        desc: Format the repo with prettier
         cmds:
-            - npx prettier --write src
+            - pnpm run format
+
+    format-check:
+        desc: Check formatting (same as CI)
+        cmds:
+            - pnpm run format:check
 
     package:
         desc: Build and zip the plugin (same layout as CI) into deckfaqs.zip / deckfaqs.tar.gz
