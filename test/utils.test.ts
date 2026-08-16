@@ -291,13 +291,32 @@ describe('getGuideHtml', () => {
             success: true,
             result: JSON.stringify({
                 guide: '<div id="faqwrap"></div>',
-                toc: [],
+                toc: [
+                    {
+                        label: 'A',
+                        options: [
+                            { data: 'a', label: 'a' },
+                            {
+                                label: 'B',
+                                options: [{ data: 'b', label: 'b' }],
+                            },
+                        ],
+                    },
+                ],
             }),
         });
         const browserView = { LoadURL: vi.fn() } as unknown as BrowserView;
-        await getGuideHtml(url, { browserView, cancelled: () => false });
+        const page = await getGuideHtml(url, {
+            browserView,
+            cancelled: () => false,
+        });
         const code = vi.mocked(executeInTab).mock.lastCall?.[2] ?? '';
         expect(code).toContain('get_neo_guide');
+        // Nested groups are flattened for Steam's one-level Dropdown.
+        expect(page.toc).toEqual([
+            { label: 'A', options: [{ data: 'a', label: 'a' }] },
+            { label: 'A › B', options: [{ data: 'b', label: 'b' }] },
+        ]);
     });
     it('reports a missing Neoseeker page as such', async () => {
         const { fetchNoCors, executeInTab } = await import('@decky/api');

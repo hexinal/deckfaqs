@@ -134,6 +134,37 @@ export const tocSectionFor = (
     return walk(toc);
 };
 
+/**
+ * Steam's Dropdown renders one level of grouping: a group inside a group
+ * shows up empty. Promote nested groups to top-level groups labelled by
+ * their path ("Items & Equipment › Weapons › Daggers"), keeping order.
+ */
+export const flattenToc = (
+    toc: readonly DropdownOption[]
+): DropdownOption[] => {
+    const out: DropdownOption[] = [];
+    const visit = (
+        entries: readonly DropdownOption[],
+        parent: string | undefined,
+        sink: DropdownOption[]
+    ) => {
+        for (const entry of entries) {
+            if (!entry.options) {
+                sink.push(entry);
+                continue;
+            }
+            // Labels are ReactNodes in the type but strings in every TOC we build.
+            const own = typeof entry.label === 'string' ? entry.label : '';
+            const label = parent && own ? `${parent} › ${own}` : parent || own;
+            const leaves: DropdownOption[] = [];
+            out.push({ label, options: leaves });
+            visit(entry.options, label, leaves);
+        }
+    };
+    visit(toc, undefined, out);
+    return out.filter((entry) => !entry.options || entry.options.length > 0);
+};
+
 export const unreachableError = (source: Source): string =>
     `Couldn't load ${SOURCE_LABEL[source]}. Check the connection and retry.`;
 export const notFoundError = (source: Source): string =>
