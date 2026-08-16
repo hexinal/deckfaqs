@@ -365,14 +365,21 @@ export const neoGuideCode = `function get_neo_guide() {
             (nav ? '<div class="neo-nav">' + nav + '</div>' : '') +
             '</div>';
         // Sidebar TOC -> dropdown entries: heading groups, accordion sub-groups.
-        // Page links only: no accordion toggles (#toc…), no red links to missing pages.
-        const linkOf = (li) => Array.from(li.children).find((c) => c.tagName === 'A' && !c.classList.contains('new') && (c.getAttribute('href') || '').charAt(0) !== '#');
+        // The li's own link (a real page or a red link to a missing page), as
+        // opposed to the accordion toggles (#toc…).
+        const ownLink = (li) => Array.from(li.children).find((c) => c.tagName === 'A' && (c.getAttribute('href') || '').charAt(0) !== '#');
+        // Page links only: no red links to missing pages.
+        const linkOf = (li) => {
+            const a = ownLink(li);
+            return a && !a.classList.contains('new') ? a : undefined;
+        };
         const entryOf = (li) => {
             const nested = Array.from(li.children).find((c) => c.tagName === 'UL');
             const page = linkOf(li);
             if (nested) {
-                const toggles = Array.from(li.children).filter((c) => c.tagName === 'A' && c.classList.contains('accordion-toggle'));
-                const labelEl = page || toggles[toggles.length - 1] || li;
+                // Label: the group's own link (even a red one), else the toggle that carries text.
+                const toggles = Array.from(li.children).filter((c) => c.tagName === 'A' && c.classList.contains('accordion-toggle') && clean(c.textContent));
+                const labelEl = ownLink(li) || toggles[toggles.length - 1] || li;
                 const label = clean(labelEl.textContent);
                 const options = page ? [{ data: page.href, label }] : [];
                 for (const child of Array.from(nested.children)) {

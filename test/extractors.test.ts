@@ -360,6 +360,12 @@ describe('neoGuideCode (Neoseeker wiki and FAQ pages)', () => {
                 '<div id="wiki-navigation"><div class="wiki-toc"><ul><li class="heading">Chapters</li>' +
                 '<li><a href="https://www.neoseeker.com/g/Page_One">Page One</a></li>' +
                 '<li><a href="https://www.neoseeker.com/g/Missing?action=edit&amp;redlink=1" class="new">Missing</a></li>' +
+                // Accordion group whose own link is a red link (Elden Ring "Melee Armaments"):
+                // keeps its label, is not a page itself, holds the real pages below it.
+                '<li><a href="#toc1" class="accordion-toggle"><i class="icon"></i></a> ' +
+                '<a href="https://www.neoseeker.com/g/Melee?edit" class="new">Melee Armaments</a> ' +
+                '<ul id="toc1"><li><a href="https://www.neoseeker.com/g/Equipment/Daggers">Daggers</a></li>' +
+                '<li><a href="https://www.neoseeker.com/g/Equipment/Axes?edit" class="new">Axes</a></li></ul></li>' +
                 '</ul></div></div><footer id="footer"></footer>'
         );
         const { guide, toc } = JSON.parse(raw as string) as {
@@ -381,6 +387,15 @@ describe('neoGuideCode (Neoseeker wiki and FAQ pages)', () => {
                     {
                         data: 'https://www.neoseeker.com/g/Page_One',
                         label: 'Page One',
+                    },
+                    {
+                        label: 'Melee Armaments',
+                        options: [
+                            {
+                                data: 'https://www.neoseeker.com/g/Equipment/Daggers',
+                                label: 'Daggers',
+                            },
+                        ],
                     },
                 ],
             },
