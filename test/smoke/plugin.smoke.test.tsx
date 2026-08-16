@@ -227,6 +227,16 @@ describe('DeckFAQs bundle', () => {
             });
         fake('scrollHeight', 1000);
         fake('clientHeight', 200);
+        // ...and, like a browser, shift guide content up by the scroll offset.
+        // eslint-disable-next-line @typescript-eslint/unbound-method
+        const realRect = HTMLElement.prototype.getBoundingClientRect;
+        HTMLElement.prototype.getBoundingClientRect = function (
+            this: HTMLElement
+        ) {
+            const scroller = this.closest('.deckfaqs_guide')?.parentElement;
+            const top = scroller ? -scroller.scrollTop : 0;
+            return { ...realRect.call(this), top, y: top, bottom: top };
+        };
         const guideUrl =
             'https://gamefaqs.gamespot.com/ps2/197344-final-fantasy-x/faqs/69037';
         const scroller = () =>
@@ -242,7 +252,15 @@ describe('DeckFAQs bundle', () => {
             clickButton(/^Back$/);
             await screen.findByText('Guides');
             expect(steam.storage.get('deckfaqs_positions')).toMatchObject({
-                [guideUrl]: { page: '', ratio: 0.5 },
+                [guideUrl]: {
+                    page: '',
+                    ratio: 0.5,
+                    // jsdom has no layout, so every anchor sits at 0 and the
+                    // last one wins; 400px past it in a 200px viewport.
+                    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+                    anchor: expect.any(String),
+                    offset: 2,
+                },
             });
             // Reopen: same guide lands where we left off.
             clickButton(/FFX FAQ\/Walkthrough/);
@@ -307,6 +325,7 @@ describe('DeckFAQs bundle', () => {
                 [guideUrl]: { page: '', ratio: 0 },
             });
         } finally {
+            HTMLElement.prototype.getBoundingClientRect = realRect;
             delete (HTMLElement.prototype as { scrollHeight?: number })
                 .scrollHeight;
             delete (HTMLElement.prototype as { clientHeight?: number })

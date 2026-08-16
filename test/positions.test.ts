@@ -2,7 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
     getPosition,
     loadPositions,
+    pickAnchor,
     resetPositionsCache,
+    restoreTarget,
     savePosition,
 } from '../src/positions';
 import { MAX_POSITIONS, POSITIONS } from '../src/constants';
@@ -44,6 +46,7 @@ describe('positions', () => {
         storage.set(POSITIONS, {
             'https://g/faqs/1': { page: '', ratio: 0.5, ts: 1 },
             'https://g/faqs/2': { ratio: 'x' },
+            'https://g/faqs/3': { page: '', ratio: 0.5, ts: 1, anchor: 5 },
         });
         await loadPositions();
         await loadPositions();
@@ -54,6 +57,7 @@ describe('positions', () => {
             ts: 1,
         });
         expect(getPosition('https://g/faqs/2')).toBeUndefined();
+        expect(getPosition('https://g/faqs/3')).toBeUndefined();
     });
 
     it('coalesces writes and flushes immediately on request', async () => {
@@ -98,5 +102,50 @@ describe('positions', () => {
         expect(Object.keys(stored)).toHaveLength(MAX_POSITIONS);
         expect(stored['https://g/faqs/0']).toBeUndefined();
         expect(stored[`https://g/faqs/${MAX_POSITIONS + 4}`]).toBeDefined();
+    });
+});
+
+describe('pickAnchor / restoreTarget', () => {
+    const anchors = [
+        { name: 'faqwrap', top: 0 },
+        { name: 'section3', top: 300 },
+        { name: 'section4', top: 900 },
+    ];
+
+    it('picks the last anchor at or above the viewport top with its offset', () => {
+        expect(pickAnchor(anchors, 0, 200)).toEqual({
+            anchor: 'faqwrap',
+            offset: 0,
+        });
+        expect(pickAnchor(anchors, 500, 200)).toEqual({
+            anchor: 'section3',
+            offset: 1,
+        });
+        // 1px tolerance for sub-pixel layout.
+        expect(pickAnchor(anchors, 899.5, 200).anchor).toBe('section4');
+        expect(pickAnchor([], 500, 200)).toEqual({});
+        expect(pickAnchor(anchors, 500, 0)).toEqual({});
+    });
+
+    it('restores anchor + offset, capped at the next anchor', () => {
+        const pos = { ratio: 0.5, anchor: 'section3', offset: 1 };
+        expect(restoreTarget(pos, anchors, 2000, 200)).toBe(500);
+        // Narrower layout: section3 is only 150px tall here → stop before section4.
+        const compact = [
+            { name: 'faqwrap', top: 0 },
+            { name: 'section3', top: 300 },
+            { name: 'section4', top: 450 },
+        ];
+        expect(restoreTarget(pos, compact, 2000, 200)).toBe(449);
+        // Never beyond the scrollable range.
+        expect(restoreTarget(pos, anchors, 600, 200)).toBe(400);
+    });
+
+    it('falls back to the ratio when the anchor is missing', () => {
+        expect(
+            restoreTarget({ ratio: 0.5, anchor: 'gone' }, anchors, 1200, 200)
+        ).toBe(500);
+        expect(restoreTarget({ ratio: 0.5 }, [], 1200, 200)).toBe(500);
+        expect(restoreTarget({ ratio: 2 }, [], 1200, 200)).toBe(1000);
     });
 });

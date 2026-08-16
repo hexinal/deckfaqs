@@ -26,7 +26,7 @@ export const TocDropdown = ({ style }: TocDropdownProps) => {
                     ...currentGuide,
                     anchor,
                     currentTocSection: path,
-                    restoreRatio: undefined,
+                    restore: undefined,
                 },
             });
         } else {
@@ -51,7 +51,7 @@ export const TocDropdown = ({ style }: TocDropdownProps) => {
                             anchor,
                             page: path.split('#')[0],
                             currentTocSection: path,
-                            restoreRatio: undefined,
+                            restore: undefined,
                         },
                     });
                 }

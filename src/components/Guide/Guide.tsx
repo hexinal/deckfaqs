@@ -6,7 +6,14 @@ import {
     Router,
 } from '@decky/ui';
 import { routerHook } from '@decky/api';
-import { useCallback, useContext, useEffect, useMemo, useRef } from 'react';
+import {
+    useCallback,
+    useContext,
+    useEffect,
+    useLayoutEffect,
+    useMemo,
+    useRef,
+} from 'react';
 import {
     AppContext,
     AppContextProvider,
@@ -21,7 +28,13 @@ import parse, {
 import { ActionType } from '../../reducers/AppReducer';
 import { getGuideHtml, request } from '../../utils';
 import { GAMEFAQS_ORIGIN } from '../../constants';
-import { getPosition, savePosition } from '../../positions';
+import {
+    type AnchorTop,
+    getPosition,
+    pickAnchor,
+    restoreTarget,
+    savePosition,
+} from '../../positions';
 import { TocDropdown } from '../Nav/TocDropdown';
 import { Search } from '../Nav/Search';
 import { ScrollPanel } from '../ScrollPanel';
@@ -73,7 +86,7 @@ export const Guide = ({ fullscreen }: GuideProps) => {
                                         payload: {
                                             ...currentGuide,
                                             anchor,
-                                            restoreRatio: undefined,
+                                            restore: undefined,
                                         },
                                     });
                                 }}
@@ -119,7 +132,7 @@ export const Guide = ({ fullscreen }: GuideProps) => {
                                                     guideHtml: html,
                                                     anchor,
                                                     page,
-                                                    restoreRatio: undefined,
+                                                    restore: undefined,
                                                 },
                                             });
                                         }
@@ -170,9 +183,9 @@ export const Guide = ({ fullscreen }: GuideProps) => {
                 type: ActionType.UPDATE_GUIDE,
                 payload: {
                     ...updatedGuide,
-                    restoreRatio:
+                    restore:
                         pos && pos.page === (updatedGuide.page ?? '')
-                            ? pos.ratio
+                            ? pos
                             : undefined,
                 },
             });
@@ -189,6 +202,21 @@ export const Guide = ({ fullscreen }: GuideProps) => {
             el = el.parentElement;
         }
         return guideDiv.current?.parentElement ?? null;
+    }, []);
+
+    // Every `[name]`/`[id]` in the guide with its top in scroll-container
+    // coordinates, sorted — the candidates for anchor-based positions.
+    const getAnchorTops = useCallback((el: HTMLElement): AnchorTop[] => {
+        const root = guideDiv.current;
+        if (!root) return [];
+        const base = el.getBoundingClientRect().top - el.scrollTop;
+        const out: AnchorTop[] = [];
+        for (const node of root.querySelectorAll('[name], [id]')) {
+            const name = node.getAttribute('name') || node.getAttribute('id');
+            if (!name) continue;
+            out.push({ name, top: node.getBoundingClientRect().top - base });
+        }
+        return out.sort((a, b) => a.top - b.top);
     }, []);
 
     // Reads the guide through stateRef so the callback identity stays stable
@@ -218,7 +246,7 @@ export const Guide = ({ fullscreen }: GuideProps) => {
                                     guideHtml: html,
                                     anchor,
                                     page: '',
-                                    restoreRatio: undefined,
+                                    restore: undefined,
                                 },
                             });
                         }
@@ -299,29 +327,52 @@ export const Guide = ({ fullscreen }: GuideProps) => {
     }, []);
     // Remember the reading position (per guide + page) as the user scrolls,
     // and flush the last known one when this view goes away (Back, fullscreen
-    // dismiss, plugin unload).
+    // dismiss, plugin unload). Layout effect: its cleanup runs while the
+    // element is still in the document, so the final measurement is real.
     const guideUrl = currentGuide?.guideUrl;
     const page = currentGuide?.page ?? '';
-    useEffect(() => {
+    useLayoutEffect(() => {
         const el = getScrollElement();
         if (!el || !guideUrl || isLoading || error) return;
         let last: number | undefined;
-        const onScroll = () => {
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        // Anchor lookup walks the whole guide, so do it at most every 250ms.
+        const record = (immediate: boolean) => {
+            timer = undefined;
             const range = el.scrollHeight - el.clientHeight;
             if (range <= 0) return;
             last = Math.min(1, Math.max(0, el.scrollTop / range));
-            savePosition(guideUrl, { page, ratio: last });
+            savePosition(
+                guideUrl,
+                {
+                    page,
+                    ratio: last,
+                    ...pickAnchor(
+                        getAnchorTops(el),
+                        el.scrollTop,
+                        el.clientHeight
+                    ),
+                },
+                immediate
+            );
+        };
+        const onScroll = () => {
+            if (!timer) timer = setTimeout(() => record(false), 250);
         };
         el.addEventListener('scroll', onScroll, { passive: true });
         return () => {
             el.removeEventListener('scroll', onScroll);
-            if (last !== undefined) {
+            if (timer) clearTimeout(timer);
+            if (el.isConnected) {
+                if (timer || last !== undefined) record(true);
+            } else if (last !== undefined) {
+                // Detached elements measure as 0: just flush the last ratio.
                 savePosition(guideUrl, { page, ratio: last }, true);
             }
         };
-    }, [guideUrl, page, isLoading, error, getScrollElement]);
+    }, [guideUrl, page, isLoading, error, getScrollElement, getAnchorTops]);
 
-    // Restore a saved position: `restoreRatio` is set when the guide is opened
+    // Restore a saved position: `restore` is set when the guide is opened
     // from the list (or handed back from fullscreen); on first mount fall back
     // to the in-memory cache so fullscreen starts where the panel was. Anchors
     // win — they mean the user asked for a specific section.
@@ -330,25 +381,28 @@ export const Guide = ({ fullscreen }: GuideProps) => {
         if (!currentGuide || currentGuide === restoredFor.current) return;
         const first = restoredFor.current === undefined;
         restoredFor.current = currentGuide;
-        let ratio = currentGuide.restoreRatio;
-        if (ratio === undefined && first && currentGuide.guideUrl) {
+        let position = currentGuide.restore;
+        if (position === undefined && first && currentGuide.guideUrl) {
             const pos = getPosition(currentGuide.guideUrl);
-            if (pos && pos.page === (currentGuide.page ?? '')) {
-                ratio = pos.ratio;
-            }
+            if (pos && pos.page === (currentGuide.page ?? '')) position = pos;
         }
-        if (ratio === undefined || currentGuide.anchor) return;
+        if (position === undefined || currentGuide.anchor) return;
         const el = getScrollElement();
         if (!el) return;
-        const target = ratio;
+        const target = position;
         const apply = () => {
-            el.scrollTop = target * (el.scrollHeight - el.clientHeight);
+            el.scrollTop = restoreTarget(
+                target,
+                getAnchorTops(el),
+                el.scrollHeight,
+                el.clientHeight
+            );
         };
         apply();
         // Once more after layout settles (fonts/images can change the height).
         const raf = requestAnimationFrame(apply);
         return () => cancelAnimationFrame(raf);
-    }, [currentGuide, getScrollElement]);
+    }, [currentGuide, getScrollElement, getAnchorTops]);
     return useMemo(
         () =>
             error ? (

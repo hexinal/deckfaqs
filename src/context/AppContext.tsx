@@ -1,6 +1,7 @@
 import type { DropdownOption } from '@decky/ui';
 import React, { createContext, useReducer } from 'react';
 import type { ListItem } from '../components/List/List';
+import type { GuidePosition } from '../positions';
 import { type AppActions, appReducer } from '../reducers/AppReducer';
 
 export type PluginState = 'games' | 'results' | 'guides' | 'guide';
@@ -19,8 +20,8 @@ export type GuideContents = {
     anchor?: string;
     /** Relative page path of guideHtml within a paginated guide ('' / undefined = first page). */
     page?: string;
-    /** Saved scroll ratio to apply once when the guide is (re)opened; see positions.ts. */
-    restoreRatio?: number;
+    /** Saved position to apply once when the guide is (re)opened; see positions.ts. */
+    restore?: GuidePosition;
 };
 
 export type GuideSearch = {

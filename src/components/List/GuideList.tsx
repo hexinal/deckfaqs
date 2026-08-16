@@ -29,9 +29,9 @@ export const GuideList = () => {
                         page ? `${url}/${page}` : url,
                         ctx
                     );
-                    return { ...res, page, restoreRatio: pos?.ratio };
+                    return { ...res, page, restore: pos };
                 },
-                ({ html, toc, page, restoreRatio }) => {
+                ({ html, toc, page, restore }) => {
                     dispatch({
                         type: ActionType.UPDATE_GUIDE,
                         payload: {
@@ -39,7 +39,7 @@ export const GuideList = () => {
                             guideUrl: url,
                             guideToc: toc,
                             page,
-                            restoreRatio,
+                            restore,
                         },
                     });
                 }

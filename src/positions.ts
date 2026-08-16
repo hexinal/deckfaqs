@@ -4,8 +4,12 @@ import { MAX_POSITIONS, POSITIONS } from './constants';
 export type GuidePosition = {
     /** Relative page path passed to getGuideHtml ('' = first page, e.g. '?page=1'). */
     page: string;
-    /** scrollTop / (scrollHeight - clientHeight), 0..1 — portable across layouts. */
+    /** scrollTop / (scrollHeight - clientHeight), 0..1 — fallback when the anchor is gone. */
     ratio: number;
+    /** Nearest `[name]`/`[id]` at or above the viewport top, when the page has any. */
+    anchor?: string;
+    /** How far past the anchor the viewport top was, in viewport heights. */
+    offset?: number;
     /** Last write time (ms since epoch), used to evict the oldest entries. */
     ts: number;
 };
@@ -18,12 +22,67 @@ let cache: Positions | undefined;
 let loading: Promise<Positions> | undefined;
 let writeTimer: ReturnType<typeof setTimeout> | undefined;
 
-const isPosition = (v: unknown): v is GuidePosition =>
-    typeof v === 'object' &&
-    v !== null &&
-    typeof (v as GuidePosition).page === 'string' &&
-    typeof (v as GuidePosition).ratio === 'number' &&
-    typeof (v as GuidePosition).ts === 'number';
+const isPosition = (v: unknown): v is GuidePosition => {
+    if (typeof v !== 'object' || v === null) return false;
+    const p = v as GuidePosition;
+    return (
+        typeof p.page === 'string' &&
+        typeof p.ratio === 'number' &&
+        typeof p.ts === 'number' &&
+        (p.anchor === undefined || typeof p.anchor === 'string') &&
+        (p.offset === undefined || typeof p.offset === 'number')
+    );
+};
+
+/** An anchorable element's name and its top, in scroll-container coordinates. */
+export type AnchorTop = { name: string; top: number };
+
+/**
+ * The anchor to remember for a viewport whose top is at `scrollTop`: the last
+ * one at or above it, plus the distance past it in viewport heights.
+ * `anchors` must be sorted by `top`.
+ */
+export const pickAnchor = (
+    anchors: readonly AnchorTop[],
+    scrollTop: number,
+    clientHeight: number
+): Pick<GuidePosition, 'anchor' | 'offset'> => {
+    let found: AnchorTop | undefined;
+    for (const a of anchors) {
+        if (a.top > scrollTop + 1) break;
+        found = a;
+    }
+    if (!found || clientHeight <= 0) return {};
+    return {
+        anchor: found.name,
+        offset: Math.max(0, (scrollTop - found.top) / clientHeight),
+    };
+};
+
+/**
+ * scrollTop to restore `position` from: the saved anchor plus its offset,
+ * never past the next anchor (layouts differ between panel and fullscreen);
+ * falls back to the ratio when the anchor isn't on this page.
+ */
+export const restoreTarget = (
+    position: Pick<GuidePosition, 'ratio' | 'anchor' | 'offset'>,
+    anchors: readonly AnchorTop[],
+    scrollHeight: number,
+    clientHeight: number
+): number => {
+    const max = Math.max(0, scrollHeight - clientHeight);
+    if (position.anchor !== undefined) {
+        const i = anchors.findIndex((a) => a.name === position.anchor);
+        if (i >= 0) {
+            const top = anchors[i]!.top;
+            let target = top + (position.offset ?? 0) * clientHeight;
+            const next = anchors[i + 1];
+            if (next && next.top > top) target = Math.min(target, next.top - 1);
+            return Math.min(max, Math.max(0, target));
+        }
+    }
+    return Math.min(max, Math.max(0, position.ratio * max));
+};
 
 /** Load (once) the saved positions from SteamClient.Storage; {} on any error. */
 export const loadPositions = (): Promise<Positions> => {
