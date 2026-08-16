@@ -1,3 +1,9 @@
+## [2.0.6](https://github.com/hexinal/deckfaqs/compare/v2.0.5...v2.0.6) (2026-08-16)
+
+### Bug Fixes
+
+* serialise scrapes, drop stale results, show fetch errors with retry ([#13](https://github.com/hexinal/deckfaqs/issues/13)) ([6cbdc3e](https://github.com/hexinal/deckfaqs/commit/6cbdc3ee1fe6a846ecc55780051bbc9a1b50f873))
+
 ## [2.0.5](https://github.com/hexinal/deckfaqs/compare/v2.0.4...v2.0.5) (2026-08-16)
 
 ### Bug Fixes

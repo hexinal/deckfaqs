@@ -1,6 +1,6 @@
 {
     "name": "deckfaqs",
-    "version": "2.0.5",
+    "version": "2.0.6",
     "description": "GameFAQs browser for the Steam Deck",
     "type": "module",
     "scripts": {
