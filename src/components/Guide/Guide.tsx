@@ -246,27 +246,27 @@ export const Guide = ({ fullscreen }: GuideProps) => {
                 <>
                     <style>
                         {`
-                        @keyframes deckfaqs_outline_grow {
-                          0% {
-                            outline: 12px solid;
-                          }
-                          100% {
-                            outline: 2px solid;
-                          }
+                      @keyframes deckfaqs_outline_grow {
+                        0% {
+                          outline: 12px solid;
                         }
-                        @keyframes deckfaqs_outline_fade {
-                          0% {
-                            outline-color: rgba(255, 255, 255, 0);
-                          }
-                          100% {
-                            outline-color: rgba(255, 255, 255, 0.6);
-                          }
+                        100% {
+                          outline: 2px solid;
                         }
-                        @keyframes deckfaqs_blinker {
-                          50% {
-                            outline-color: rgba(255, 255, 255, 0.0);
-                          }
+                      }
+                      @keyframes deckfaqs_outline_fade {
+                        0% {
+                          outline-color: rgba(255, 255, 255, 0);
                         }
+                        100% {
+                          outline-color: rgba(255, 255, 255, 0.6);
+                        }
+                      }
+                      @keyframes deckfaqs_blinker {
+                        50% {
+                          outline-color: rgba(255, 255, 255, 0.0);
+                        }
+                      }
                       .deckfaqs_highlight {
                         background-color: #FFFF00;
                       }
@@ -309,21 +309,17 @@ export const Guide = ({ fullscreen }: GuideProps) => {
                         padding: 5px;
                         width: 66%;
                       }
-                      @media (max-width: 767px) {
-                        .ffaq div.section_box,
-                        .ffaq div.spoiler_box,
-                        .ffaq blockquote {
-                          overflow: auto;
-                        }
+                      .deckfaqs_guide_compact .ffaq div.section_box,
+                      .deckfaqs_guide_compact .ffaq div.spoiler_box,
+                      .deckfaqs_guide_compact .ffaq blockquote {
+                        overflow: auto;
                       }
-                      @media (max-width: 767px) {
-                        .ffaq div.section_box,
-                        .ffaq div.spoiler_box,
-                        .ffaq blockquote {
-                          display: block;
-                          overflow-x: scroll;
-                          width: auto;
-                        }
+                      .deckfaqs_guide_compact .ffaq div.section_box,
+                      .deckfaqs_guide_compact .ffaq div.spoiler_box,
+                      .deckfaqs_guide_compact .ffaq blockquote {
+                        display: block;
+                        overflow-x: scroll;
+                        width: auto;
                       }
                       .ffaq div.section_box p:last-child,
                       .ffaq div.section_box ul:last-child,
@@ -368,21 +364,15 @@ export const Guide = ({ fullscreen }: GuideProps) => {
                         table-layout: fixed;
                         width: auto;
                       }
-                      @media (max-width: 979px) {
-                        .ffaq table {
-                          clear: both;
-                        }
+                      .ffaq table {
+                        clear: both;
                       }
-                      @media (max-width: 767px) {
-                        .ffaq table {
-                          width: 100% !important;
-                        }
+                      .deckfaqs_guide_compact .ffaq table {
+                        width: 100% !important;
                       }
-                      @media (max-width: 767px) {
-                        .ffaq table {
-                          display: inline-table;
-                          overflow-x: scroll;
-                        }
+                      .deckfaqs_guide_compact .ffaq table {
+                        display: inline-table;
+                        overflow-x: scroll;
                       }
                       .ffaq table tr:nth-child(2n + 1),
                       .ffaq table tr:nth-child(2n + 1) td {
@@ -399,12 +389,10 @@ export const Guide = ({ fullscreen }: GuideProps) => {
                         text-shadow: none;
                         vertical-align: middle;
                       }
-                      @media (max-width: 767px) {
-                        .ffaq table td,
-                        .ffaq table th {
-                          font-size: 10px;
-                          padding: 1px;
-                        }
+                      .deckfaqs_guide_compact .ffaq table td,
+                      .deckfaqs_guide_compact .ffaq table th {
+                        font-size: 10px;
+                        padding: 1px;
                       }
                       .ffaq table td.l,
                       .ffaq table th.l {
@@ -457,14 +445,12 @@ export const Guide = ({ fullscreen }: GuideProps) => {
                         margin: 10px 10px 18px;
                         max-width: 300px;
                       }
-                      @media (max-width: 767px) {
-                        .ffaq div.fimg_small,
-                        .ffaq div.cimg_s {
-                          clear: both;
-                          display: inline-block;
-                          float: none;
-                          margin: 0 0 10px;
-                        }
+                      .deckfaqs_guide_compact .ffaq div.fimg_small,
+                      .deckfaqs_guide_compact .ffaq div.cimg_s {
+                        clear: both;
+                        display: inline-block;
+                        float: none;
+                        margin: 0 0 10px;
                       }
                       .ffaq div.fimg_smallleft,
                       .ffaq div.cimg_sleft {
@@ -473,14 +459,12 @@ export const Guide = ({ fullscreen }: GuideProps) => {
                         margin: 10px 20px 10px 10px;
                         max-width: 300px;
                       }
-                      @media (max-width: 767px) {
-                        .ffaq div.fimg_smallleft,
-                        .ffaq div.cimg_sleft {
-                          clear: both;
-                          display: inline-block;
-                          float: none;
-                          margin: 0 0 10px;
-                        }
+                      .deckfaqs_guide_compact .ffaq div.fimg_smallleft,
+                      .deckfaqs_guide_compact .ffaq div.cimg_sleft {
+                        clear: both;
+                        display: inline-block;
+                        float: none;
+                        margin: 0 0 10px;
                       }
                       .ffaq div.fimg_smallright,
                       .ffaq div.cimg_sright {
@@ -489,14 +473,12 @@ export const Guide = ({ fullscreen }: GuideProps) => {
                         margin: 10px 10px 10px 20px;
                         max-width: 300px;
                       }
-                      @media (max-width: 767px) {
-                        .ffaq div.fimg_smallright,
-                        .ffaq div.cimg_sright {
-                          clear: both;
-                          display: inline-block;
-                          float: none;
-                          margin: 0 0 10px;
-                        }
+                      .deckfaqs_guide_compact .ffaq div.fimg_smallright,
+                      .deckfaqs_guide_compact .ffaq div.cimg_sright {
+                        clear: both;
+                        display: inline-block;
+                        float: none;
+                        margin: 0 0 10px;
                       }
                       .ffaq div.fimg_largeleft {
                         clear: left;
@@ -504,11 +486,9 @@ export const Guide = ({ fullscreen }: GuideProps) => {
                         margin: 10px 10px 18px;
                         max-width: 750px;
                       }
-                      @media (max-width: 767px) {
-                        .ffaq div.fimg_largeleft {
-                          margin: 0;
-                          max-width: 100%;
-                        }
+                      .deckfaqs_guide_compact .ffaq div.fimg_largeleft {
+                        margin: 0;
+                        max-width: 100%;
                       }
                       .ffaq div.fimg_large,
                       .ffaq div.cimg_l {
@@ -517,11 +497,9 @@ export const Guide = ({ fullscreen }: GuideProps) => {
                         margin: 10px 10px 18px;
                         max-width: 750px;
                       }
-                      @media (max-width: 767px) {
-                        .ffaq div.fimg_large,
-                        .ffaq div.cimg_l {
-                          margin: 0;
-                        }
+                      .deckfaqs_guide_compact .ffaq div.fimg_large,
+                      .deckfaqs_guide_compact .ffaq div.cimg_l {
+                        margin: 0;
                       }
                       .ffaq div.clear {
                         clear: left;
@@ -547,17 +525,15 @@ export const Guide = ({ fullscreen }: GuideProps) => {
                         margin-right: 2px;
                         vertical-align: middle;
                       }
-                      @media (max-width: 767px) {
-                        .ffaq img.bigresize {
-                          height: 100% !important;
-                          width: 100% !important;
-                        }
-                        .ffaq table img.bigresize {
-                          height: auto !important;
-                          width: auto !important;
-                          max-height: 100% !important;
-                          max-width: 100% !important;
-                        }
+                      .deckfaqs_guide_compact .ffaq img.bigresize {
+                        height: 100% !important;
+                        width: 100% !important;
+                      }
+                      .deckfaqs_guide_compact .ffaq table img.bigresize {
+                        height: auto !important;
+                        width: auto !important;
+                        max-height: 100% !important;
+                        max-width: 100% !important;
                       }
                       .ffaq ol,
                       .ffaq ul {
@@ -593,30 +569,25 @@ export const Guide = ({ fullscreen }: GuideProps) => {
                         margin: 0 auto !important;
                         background: #fff;
                       }
-                      @media (max-width: 767px) {
-                        .ffaq .faqtext {
-                          overflow-x: auto;
-                        }
+                      .deckfaqs_guide_compact .ffaq .faqtext {
+                        overflow-x: auto;
                       }
-                      @media (min-width: 768px) {
-                        .ffaq .faqtext {
-                          padding: 25px 100px;
-                        }
+                      .deckfaqs_guide_wide .ffaq .faqtext {
+                        padding: 25px 100px;
                       }
-                      @media (max-width: 767px) {
-                        .ffaq .faqtext {
-                          background: none !important;
-                        }
+                      .deckfaqs_guide_compact .ffaq .faqtext {
+                        padding: 6px 8px;
+                      }
+                      .deckfaqs_guide_compact .ffaq .faqtext {
+                        background: none !important;
                       }
                       .ffaq .faqtext pre {
                         margin: 0px !important;
                         white-space: pre-wrap;
                         font: 14px "Courier New", "Courier", monospace !important;
                       }
-                      @media (max-width: 767px) {
-                        .ffaq .faqtext pre {
-                          font: 11px "Courier New", "Courier", monospace !important;
-                        }
+                      .deckfaqs_guide_compact .ffaq .faqtext pre {
+                        font: 11px "Courier New", "Courier", monospace !important;
                       }
                       .ffaq.imgmain {
                         display: table;
@@ -650,7 +621,13 @@ export const Guide = ({ fullscreen }: GuideProps) => {
                             //@ts-ignore
                             focusableIfNoChildren={true}
                             style={{ background: '#fff' }}
-                            className={state.darkMode ? 'deckfaqs_dark' : ''}
+                            className={[
+                                'deckfaqs_guide',
+                                fullscreen
+                                    ? 'deckfaqs_guide_wide'
+                                    : 'deckfaqs_guide_compact',
+                                state.darkMode ? 'deckfaqs_dark' : '',
+                            ].join(' ')}
                             ref={guideDiv}
                         >
                             {parse(currentGuide?.guideHtml ?? '', options)}

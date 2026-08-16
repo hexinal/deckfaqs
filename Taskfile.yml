@@ -35,18 +35,13 @@ tasks:
             - npx prettier --write src
 
     package:
-        desc: Build and zip the plugin (same layout as CI) into deckfaqs.zip
+        desc: Build and zip the plugin (same layout as CI) into deckfaqs.zip / deckfaqs.tar.gz
         deps: [build]
         cmds:
-            - rm -rf {{.OUT}} {{.ZIP}}
-            - mkdir -p {{.OUT}}/{{.PLUGIN_DIR}}/dist
-            - cp plugin.json package.json LICENSE {{.OUT}}/{{.PLUGIN_DIR}}/
-            - cp dist/index.js dist/index.js.map {{.OUT}}/{{.PLUGIN_DIR}}/dist/
-            - cd {{.OUT}} && zip -r ../{{.ZIP}} {{.PLUGIN_DIR}}
-            - rm -rf {{.OUT}}
-            - 'echo "Created {{.ZIP}} — unzip into /home/deck/homebrew/plugins/ on the Deck, then: sudo systemctl restart plugin_loader"'
+            - ./scripts/package.sh
+            - 'echo "Unzip {{.ZIP}} into /home/deck/homebrew/plugins/ on the Deck, then: sudo systemctl restart plugin_loader"'
 
     clean:
         desc: Remove build outputs
         cmds:
-            - rm -rf dist {{.OUT}} {{.ZIP}}
+            - rm -rf dist {{.OUT}} {{.ZIP}} deckfaqs.tar.gz
