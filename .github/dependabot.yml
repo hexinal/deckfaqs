@@ -1,0 +1,24 @@
+# Security updates only (matches the Decky plugin ecosystem — nobody runs
+# version-bump PRs). Version updates are disabled via open-pull-requests-limit: 0;
+# Dependabot security PRs still open, and get Conventional-Commit prefixes so
+# they pass commitlint. Runtime-dep fixes release a patch (fix), dev deps don't.
+version: 2
+updates:
+    - package-ecosystem: npm
+      directory: /
+      schedule:
+          interval: monthly
+      open-pull-requests-limit: 0
+      commit-message:
+          prefix: 'fix(deps)'
+          prefix-development: 'chore(deps)'
+      labels: [dependencies, security]
+
+    - package-ecosystem: github-actions
+      directory: /
+      schedule:
+          interval: monthly
+      open-pull-requests-limit: 0
+      commit-message:
+          prefix: 'ci(deps)'
+      labels: [dependencies, security]
