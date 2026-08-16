@@ -1,5 +1,19 @@
-import { ModalRootProps, ModalRoot, TextField } from '@decky/ui';
-import { useEffect, useRef, useState, type ChangeEvent } from 'react';
+import {
+    DialogBody,
+    DialogButton,
+    DialogFooter,
+    Focusable,
+    ModalRoot,
+    ModalRootProps,
+    TextField,
+} from '@decky/ui';
+import {
+    useEffect,
+    useRef,
+    useState,
+    type ChangeEvent,
+    type KeyboardEvent,
+} from 'react';
 
 type MyProps = ModalRootProps & {
     setModalResult?(result: string): void;
@@ -19,6 +33,14 @@ export const SearchModal = ({
         setModalResult?.(searchText);
         closeModal?.();
     };
+    // Steam's TextField swallows the default Enter action, so a <form> never
+    // submits; listen for the key ourselves and also offer an explicit button.
+    const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            handleSubmit();
+        }
+    };
     const textField = useRef<{ element?: HTMLElement } | null>(null);
 
     useEffect(() => {
@@ -27,20 +49,29 @@ export const SearchModal = ({
     }, []);
     return (
         <ModalRoot closeModal={handleSubmit}>
-            <form
-                onSubmit={(e) => {
-                    e.preventDefault();
-                    handleSubmit();
-                }}
-            >
+            <DialogBody>
                 <TextField
                     ref={textField}
                     focusOnMount={true}
                     label="Search"
                     placeholder={promptText}
                     onChange={handleText}
+                    onKeyDown={handleKeyDown}
                 />
-            </form>
+            </DialogBody>
+            <DialogFooter>
+                <Focusable
+                    style={{ display: 'flex', justifyContent: 'flex-end' }}
+                >
+                    <DialogButton
+                        disableNavSounds={true}
+                        style={{ width: 'auto', minWidth: '120px' }}
+                        onClick={handleSubmit}
+                    >
+                        Search
+                    </DialogButton>
+                </Focusable>
+            </DialogFooter>
         </ModalRoot>
     );
 };
