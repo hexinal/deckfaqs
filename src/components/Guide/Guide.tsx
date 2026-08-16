@@ -6,8 +6,7 @@ import {
     Router,
 } from '@decky/ui';
 import { routerHook } from '@decky/api';
-import { useContext, useMemo, useRef } from 'react';
-import { useEffect } from 'react';
+import { useCallback, useContext, useEffect, useMemo, useRef } from 'react';
 import {
     AppContext,
     AppContextProvider,
@@ -40,143 +39,156 @@ export const Guide = ({ fullscreen }: GuideProps) => {
         stateRef.current = state;
     }, [state]);
 
-    const options: HTMLReactParserOptions = {
-        replace: (domNode) => {
-            if (
-                domNode instanceof Element &&
-                domNode.attribs &&
-                domNode.attribs.style
-            ) {
-                delete domNode.attribs.style;
-            }
-            if (
-                domNode instanceof Element &&
-                domNode.name === 'a' &&
-                domNode.attribs &&
-                domNode.attribs.href
-            ) {
-                const children = domNode.children;
-                let anchor = '';
-                if (domNode.attribs.href.startsWith('#')) {
-                    anchor = domNode.attribs.href.substring(1);
-                    return (
-                        <a
-                            {...domNode.attribs}
-                            className="deckfaqs-link"
-                            onClick={(e) => {
-                                e.preventDefault();
-                                dispatch({
-                                    type: ActionType.UPDATE_GUIDE,
-                                    payload: { ...currentGuide, anchor },
-                                });
-                            }}
-                        >
-                            {domToReact(children as DOMNode[])}
-                        </a>
-                    );
-                } else {
-                    anchor = domNode.attribs.href;
-                    return (
-                        <a
-                            {...domNode.attribs}
-                            className="deckfaqs-link"
-                            onClick={(e) => {
-                                e.preventDefault();
-                                const baseUrl = currentGuide?.guideUrl ?? '';
-                                getGuideHtml(
-                                    `${baseUrl}/${anchor}`,
-                                    browserView,
-                                    (result: string) => {
-                                        if (anchor.indexOf('#') > 0) {
-                                            anchor = anchor.substring(
-                                                anchor.indexOf('#') + 1
-                                            );
-                                        } else {
-                                            anchor = '';
+    const options: HTMLReactParserOptions = useMemo(
+        () => ({
+            replace: (domNode) => {
+                if (
+                    domNode instanceof Element &&
+                    domNode.attribs &&
+                    domNode.attribs.style
+                ) {
+                    delete domNode.attribs.style;
+                }
+                if (
+                    domNode instanceof Element &&
+                    domNode.name === 'a' &&
+                    domNode.attribs &&
+                    domNode.attribs.href
+                ) {
+                    const children = domNode.children;
+                    let anchor = '';
+                    if (domNode.attribs.href.startsWith('#')) {
+                        anchor = domNode.attribs.href.substring(1);
+                        return (
+                            <a
+                                {...domNode.attribs}
+                                className="deckfaqs-link"
+                                onClick={(e) => {
+                                    e.preventDefault();
+                                    dispatch({
+                                        type: ActionType.UPDATE_GUIDE,
+                                        payload: { ...currentGuide, anchor },
+                                    });
+                                }}
+                            >
+                                {domToReact(children as DOMNode[])}
+                            </a>
+                        );
+                    } else {
+                        anchor = domNode.attribs.href;
+                        return (
+                            <a
+                                {...domNode.attribs}
+                                className="deckfaqs-link"
+                                onClick={(e) => {
+                                    e.preventDefault();
+                                    const baseUrl =
+                                        currentGuide?.guideUrl ?? '';
+                                    getGuideHtml(
+                                        `${baseUrl}/${anchor}`,
+                                        browserView,
+                                        (result: string) => {
+                                            if (anchor.indexOf('#') > 0) {
+                                                anchor = anchor.substring(
+                                                    anchor.indexOf('#') + 1
+                                                );
+                                            } else {
+                                                anchor = '';
+                                            }
+                                            dispatch({
+                                                type: ActionType.UPDATE_GUIDE,
+                                                payload: {
+                                                    ...currentGuide,
+                                                    guideHtml: result,
+                                                    anchor,
+                                                },
+                                            });
                                         }
-                                        dispatch({
-                                            type: ActionType.UPDATE_GUIDE,
-                                            payload: {
-                                                ...currentGuide,
-                                                guideHtml: result,
-                                                anchor,
-                                            },
-                                        });
-                                    }
-                                );
-                            }}
-                        >
-                            {domToReact(children as DOMNode[])}
-                        </a>
+                                    );
+                                }}
+                            >
+                                {domToReact(children as DOMNode[])}
+                            </a>
+                        );
+                    }
+                } else if (
+                    domNode instanceof Element &&
+                    domNode.name === 'div' &&
+                    domNode.attribs &&
+                    domNode.attribs.class === 'ftoc'
+                ) {
+                    return <span></span>;
+                } else if (
+                    domNode instanceof Element &&
+                    domNode.name === 'img' &&
+                    domNode.attribs &&
+                    domNode.attribs.src
+                ) {
+                    return (
+                        <img
+                            {...domNode.attribs}
+                            src={`https://gamefaqs.gamespot.com${domNode.attribs.src}`}
+                        />
                     );
                 }
-            } else if (
-                domNode instanceof Element &&
-                domNode.name === 'div' &&
-                domNode.attribs &&
-                domNode.attribs.class === 'ftoc'
-            ) {
-                return <span></span>;
-            } else if (
-                domNode instanceof Element &&
-                domNode.name === 'img' &&
-                domNode.attribs &&
-                domNode.attribs.src
-            ) {
-                return (
-                    <img
-                        {...domNode.attribs}
-                        src={`https://gamefaqs.gamespot.com${domNode.attribs.src}`}
-                    />
-                );
-            }
-            return domNode;
+                return domNode;
+            },
+        }),
+        [currentGuide, browserView, dispatch]
+    );
+
+    const handleDismiss = useCallback(
+        (updatedGuide: GuideContents) => {
+            dispatch({
+                type: ActionType.UPDATE_GUIDE,
+                payload: updatedGuide,
+            });
         },
-    };
+        [dispatch]
+    );
+
+    // Reads the guide through stateRef so the callback identity stays stable
+    // and the anchor effect below only re-runs when anchor/html change.
+    const scrollToAnchor = useCallback(
+        (anchor: string = '') => {
+            if (anchor.length > 0) {
+                const elementToScrollTo =
+                    guideDiv.current?.querySelector(`[name="${anchor}"]`) ??
+                    guideDiv.current?.querySelector(`[id="${anchor}"]`);
+                if (elementToScrollTo) {
+                    elementToScrollTo.scrollIntoView();
+                } else {
+                    const guide = stateRef.current.currentGuide;
+                    const baseUrl = guide?.guideUrl ?? '';
+                    getGuideHtml(
+                        `${baseUrl}/#${anchor}`,
+                        browserView,
+                        (result: string) => {
+                            dispatch({
+                                type: ActionType.UPDATE_GUIDE,
+                                payload: {
+                                    ...guide,
+                                    guideHtml: result,
+                                    anchor,
+                                },
+                            });
+                        }
+                    );
+                }
+            } else {
+                guideDiv.current?.querySelector('#faqwrap')?.scrollIntoView();
+            }
+        },
+        [browserView, dispatch]
+    );
 
     useEffect(() => {
-        const anchor = state.currentGuide?.anchor;
-        scrollToAnchor(anchor);
-    }, [state.currentGuide?.anchor, state.currentGuide?.guideHtml]);
-
-    const handleDismiss = (updatedGuide: GuideContents) => {
-        dispatch({
-            type: ActionType.UPDATE_GUIDE,
-            payload: updatedGuide,
-        });
-    };
-    const scrollToAnchor = (anchor: string = '') => {
-        if (anchor.length > 0) {
-            const elementToScrollTo =
-                guideDiv.current?.querySelector(`[name="${anchor}"]`) ??
-                guideDiv.current?.querySelector(`[id="${anchor}"]`);
-            if (elementToScrollTo) {
-                elementToScrollTo.scrollIntoView();
-            } else {
-                const baseUrl = currentGuide?.guideUrl ?? '';
-                getGuideHtml(
-                    `${baseUrl}/#${anchor}`,
-                    browserView,
-                    (result: string) => {
-                        dispatch({
-                            type: ActionType.UPDATE_GUIDE,
-                            payload: {
-                                ...currentGuide,
-                                guideHtml: result,
-                                anchor,
-                            },
-                        });
-                    }
-                );
-            }
-        } else {
-            guideDiv.current?.querySelector('#faqwrap')?.scrollIntoView();
-        }
-    };
+        scrollToAnchor(currentGuide?.anchor);
+    }, [currentGuide?.anchor, currentGuide?.guideHtml, scrollToAnchor]);
 
     useEffect(() => {
         if (guideDiv.current) {
-            const { searchText } = search;
+            const searchText = search.searchText;
             const mark = new Mark(guideDiv.current?.querySelector('#faqwrap'));
             if (searchText) {
                 mark.unmark({
@@ -189,7 +201,7 @@ export const Guide = ({ fullscreen }: GuideProps) => {
                                 dispatch({
                                     type: ActionType.UPDATE_SEARCH,
                                     payload: {
-                                        ...search,
+                                        ...stateRef.current.search,
                                         anchorIndex: 0,
                                         searchAnchorLength: numMatches,
                                     },
@@ -200,7 +212,7 @@ export const Guide = ({ fullscreen }: GuideProps) => {
                 });
             }
         }
-    }, [search.searchText]);
+    }, [search.searchText, dispatch]);
 
     useEffect(() => {
         const elements = guideDiv.current?.querySelectorAll(
@@ -232,6 +244,9 @@ export const Guide = ({ fullscreen }: GuideProps) => {
         return function cleanup() {
             if (!fullscreen) routerHook.removeRoute('/deckfaqs-fullscreen');
         };
+        // Mount-only: register the fullscreen route once and scroll to the
+        // initial anchor; later anchor changes are handled by the effect above.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
     return useMemo(
         () =>
@@ -634,7 +649,7 @@ export const Guide = ({ fullscreen }: GuideProps) => {
                     </ScrollPanel>
                 </>
             ),
-        [currentGuide, isLoading]
+        [currentGuide, isLoading, fullscreen, options, state.darkMode]
     );
 };
 
@@ -649,14 +664,19 @@ type FullScreenGuideProps = {
 const FullScreenGuide = ({ onDismiss }: FullScreenGuideProps) => {
     const { state } = useContext(AppContext);
     const guide = useRef(state.currentGuide);
+    const onDismissRef = useRef(onDismiss);
 
     useEffect(() => {
         guide.current = state.currentGuide;
     }, [state.currentGuide]);
+    useEffect(() => {
+        onDismissRef.current = onDismiss;
+    }, [onDismiss]);
 
+    // Hand the latest guide state back to the panel when the route unmounts.
     useEffect(() => {
         return function cleanup() {
-            if (guide.current) onDismiss(guide.current);
+            if (guide.current) onDismissRef.current(guide.current);
         };
     }, []);
     return (

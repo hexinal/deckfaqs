@@ -1,4 +1,4 @@
-import { useContext, useMemo } from 'react';
+import { useCallback, useContext, useMemo } from 'react';
 import { faqsNightmareRegex } from '../../constants';
 import { AppContext } from '../../context/AppContext';
 import { ActionType } from '../../reducers/AppReducer';
@@ -12,17 +12,18 @@ export const ResultList = () => {
         browserView,
     } = useContext(AppContext);
 
-    const getGuides = async (url: string) => {
-        let guides: ListItem[] = [];
-        const faqUrl = `${url}/faqs`;
-        dispatch({
-            type: ActionType.UPDATE_PLUGIN_STATE,
-            payload: { pluginState: 'guides', isLoading: true },
-        });
-        getContent(
-            faqUrl,
-            browserView,
-            `function get_guides() {
+    const getGuides = useCallback(
+        async (url: string) => {
+            let guides: ListItem[] = [];
+            const faqUrl = `${url}/faqs`;
+            dispatch({
+                type: ActionType.UPDATE_PLUGIN_STATE,
+                payload: { pluginState: 'guides', isLoading: true },
+            });
+            getContent(
+                faqUrl,
+                browserView,
+                `function get_guides() {
                 let content = document.getElementsByClassName("guides")
                 if(content.length > 0)
                     return document.documentElement.outerHTML;
@@ -34,31 +35,33 @@ export const ResultList = () => {
                 return undefined
             }
             get_guides()`,
-            (result: string) => {
-                const body = result;
-                guides = [];
-                if (body) {
-                    const faqs = Array.from(
-                        body.matchAll?.(faqsNightmareRegex) ?? []
-                    );
-                    for (const faq of faqs) {
-                        const faqUrl = faq[1],
-                            title = faq[2],
-                            version = faq[4],
-                            date = faq[5];
-                        guides.push({
-                            url: `${url}${faqUrl}`,
-                            text: `${title} - ${version} - ${date}`,
-                        });
+                (result: string) => {
+                    const body = result;
+                    guides = [];
+                    if (body) {
+                        const faqs = Array.from(
+                            body.matchAll?.(faqsNightmareRegex) ?? []
+                        );
+                        for (const faq of faqs) {
+                            const faqUrl = faq[1],
+                                title = faq[2],
+                                version = faq[4],
+                                date = faq[5];
+                            guides.push({
+                                url: `${url}${faqUrl}`,
+                                text: `${title} - ${version} - ${date}`,
+                            });
+                        }
                     }
+                    dispatch({
+                        type: ActionType.UPDATE_GUIDES,
+                        payload: guides,
+                    });
                 }
-                dispatch({
-                    type: ActionType.UPDATE_GUIDES,
-                    payload: guides,
-                });
-            }
-        );
-    };
+            );
+        },
+        [browserView, dispatch]
+    );
 
     return useMemo(
         () => (
@@ -68,6 +71,6 @@ export const ResultList = () => {
                 handleClick={getGuides}
             ></List>
         ),
-        [searchResults]
+        [searchResults, getGuides]
     );
 };

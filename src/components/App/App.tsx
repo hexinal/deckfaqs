@@ -28,46 +28,46 @@ export const App = () => {
         };
     }, [darkMode]);
 
-    // This would work for Steam games but does not for non-steam games so we just use this for cleraing the running game
-    const handleSteamAppStateChange = ({ bRunning }: AppState) => {
-        if (!bRunning) {
-            dispatch({
-                type: ActionType.UPDATE_RUNNING_GAME,
-                payload: undefined,
-            });
-        }
-    };
-
-    // This works for both Steam and non-Steam games
-    const handleGameActionStart = (
-        _actionType: number,
-        strAppId: string,
-        actionName: string
-    ) => {
-        let newRunningGame: string | undefined = undefined;
-        const appId = parseInt(strAppId);
-        if (actionName == 'LaunchApp') {
-            const gameInfo: AppOverview =
-                appStore.GetAppOverviewByGameID(appId);
-            if (
-                gameInfo &&
-                !ignoreSteam.includes(appId) &&
-                !ignoreNonSteam.includes(gameInfo.display_name)
-            ) {
-                newRunningGame = gameInfo.display_name;
-            }
-        }
-        dispatch({
-            type: ActionType.UPDATE_RUNNING_GAME,
-            payload: newRunningGame,
-        });
-    };
-
     useEffect(() => {
         dispatch({
             type: ActionType.UPDATE_PLUGIN_STATE,
             payload: { pluginState: 'games', isLoading: true },
         });
+
+        // This would work for Steam games but does not for non-steam games so we just use this for cleraing the running game
+        const handleSteamAppStateChange = ({ bRunning }: AppState) => {
+            if (!bRunning) {
+                dispatch({
+                    type: ActionType.UPDATE_RUNNING_GAME,
+                    payload: undefined,
+                });
+            }
+        };
+
+        // This works for both Steam and non-Steam games
+        const handleGameActionStart = (
+            _actionType: number,
+            strAppId: string,
+            actionName: string
+        ) => {
+            let newRunningGame: string | undefined = undefined;
+            const appId = parseInt(strAppId);
+            if (actionName == 'LaunchApp') {
+                const gameInfo: AppOverview =
+                    appStore.GetAppOverviewByGameID(appId);
+                if (
+                    gameInfo &&
+                    !ignoreSteam.includes(appId) &&
+                    !ignoreNonSteam.includes(gameInfo.display_name)
+                ) {
+                    newRunningGame = gameInfo.display_name;
+                }
+            }
+            dispatch({
+                type: ActionType.UPDATE_RUNNING_GAME,
+                payload: newRunningGame,
+            });
+        };
 
         const getGames = async (): Promise<{
             games: ListItem[];
@@ -154,7 +154,7 @@ export const App = () => {
             onAppStateChange.unregister();
             onGameActionStart.unregister();
         };
-    }, []);
+    }, [dispatch]);
 
     return (
         <div

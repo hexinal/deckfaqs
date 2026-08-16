@@ -1,4 +1,4 @@
-import { useContext, useMemo } from 'react';
+import { useCallback, useContext, useMemo } from 'react';
 import { AppContext, TableOfContentEntry } from '../../context/AppContext';
 import { ActionType } from '../../reducers/AppReducer';
 import { List } from './List';
@@ -11,30 +11,33 @@ export const GuideList = () => {
         browserView,
     } = useContext(AppContext);
 
-    const openGuide = (url: string) => {
-        dispatch({
-            type: ActionType.UPDATE_PLUGIN_STATE,
-            payload: { pluginState: 'guide', isLoading: true },
-        });
-        getGuideHtml(
-            url,
-            browserView,
-            (result: string, toc: Array<TableOfContentEntry>) => {
-                dispatch({
-                    type: ActionType.UPDATE_GUIDE,
-                    payload: {
-                        guideHtml: result,
-                        guideUrl: url,
-                        guideToc: toc,
-                    },
-                });
-            }
-        );
-    };
+    const openGuide = useCallback(
+        (url: string) => {
+            dispatch({
+                type: ActionType.UPDATE_PLUGIN_STATE,
+                payload: { pluginState: 'guide', isLoading: true },
+            });
+            getGuideHtml(
+                url,
+                browserView,
+                (result: string, toc: Array<TableOfContentEntry>) => {
+                    dispatch({
+                        type: ActionType.UPDATE_GUIDE,
+                        payload: {
+                            guideHtml: result,
+                            guideUrl: url,
+                            guideToc: toc,
+                        },
+                    });
+                }
+            );
+        },
+        [browserView, dispatch]
+    );
     return useMemo(
         () => (
             <List header="Guides" data={guides} handleClick={openGuide}></List>
         ),
-        [guides]
+        [guides, openGuide]
     );
 };
