@@ -469,7 +469,9 @@ export const neoGuideCode = `function get_neo_guide() {
         const tocOl = markup.querySelector('.toc ol');
         return JSON.stringify({ guide, toc: tocOl ? parseOl(tocOl) : [] });
     }
-    return undefined;
+    // The page finished loading but holds no guide (e.g. a wiki page that was
+    // linked but never written): say so instead of polling to the timeout.
+    return JSON.stringify({ notFound: true });
 }
 get_neo_guide()`;
 

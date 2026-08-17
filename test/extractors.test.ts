@@ -445,11 +445,24 @@ describe('neoGuideCode (Neoseeker wiki and FAQ pages)', () => {
                 '<div id="wiki-content"><div class="mw-parser-output"><p>partial</p></div></div>'
             )
         ).toBeUndefined();
+    });
+
+    it('reports a complete page without a guide (never-written wiki page) as not found', () => {
         expect(
-            runInPage(
-                neoGuideCode,
-                '<p>not a guide</p><footer id="footer"></footer>'
+            JSON.parse(
+                runInPage(
+                    neoGuideCode,
+                    fixture('neoseeker/wiki-stub.html')
+                ) as string
             )
-        ).toBeUndefined();
+        ).toEqual({ notFound: true });
+        expect(
+            JSON.parse(
+                runInPage(
+                    neoGuideCode,
+                    '<p>not a guide</p><footer id="footer"></footer>'
+                ) as string
+            )
+        ).toEqual({ notFound: true });
     });
 });
