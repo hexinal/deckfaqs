@@ -5,7 +5,7 @@
     "api_version": 1,
     "publish": {
         "tags": ["guides", "utility"],
-        "description": "A GameFAQs browser for the Steam Deck (both Steam and non-Steam Games)",
+        "description": "A GameFAQs and Neoseeker guide browser for the Steam Deck (both Steam and non-Steam Games)",
         "image": "https://raw.githubusercontent.com/hexinal/deckfaqs/main/images/release.png"
     }
 }

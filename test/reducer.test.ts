@@ -28,13 +28,34 @@ describe('appReducer', () => {
             { ...at('results'), isLoading: true },
             {
                 type: ActionType.UPDATE_RESULTS,
-                payload: [{ text: 'A', url: 'https://x/a' }],
+                payload: {
+                    results: [{ text: 'A', url: 'https://x/a' }],
+                    term: 'a',
+                    notice: "Couldn't load Neoseeker.",
+                },
             }
         );
         expect(state.isLoading).toBe(false);
         expect(state.searchResults).toEqual([
             { text: 'A', url: 'https://x/a' },
         ]);
+        expect(state.searchTerm).toBe('a');
+        expect(state.searchNotice).toBe("Couldn't load Neoseeker.");
+        // The next (clean) search drops the notice.
+        const next = appReducer(state, {
+            type: ActionType.UPDATE_RESULTS,
+            payload: { results: [], term: 'b' },
+        });
+        expect(next.searchNotice).toBeUndefined();
+    });
+
+    it('stores the guide-source setting', () => {
+        expect(initialState.source).toBe('both');
+        const state = appReducer(initialState, {
+            type: ActionType.UPDATE_SOURCE,
+            payload: 'neoseeker',
+        });
+        expect(state.source).toBe('neoseeker');
     });
 
     it('walks BACK through guide -> guides -> results -> games', () => {

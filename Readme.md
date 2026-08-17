@@ -6,7 +6,7 @@
 
 ## Description
 
-A GameFAQs browser for the Steam Deck. This plugin supports both Steam and non-Steam games (like things setup with Steam Rom Manager for example)
+A GameFAQs and Neoseeker guide browser for the Steam Deck. This plugin supports both Steam and non-Steam games (like things setup with Steam Rom Manager for example)
 
 Built with [Decky Loader](https://github.com/SteamDeckHomebrew/decky-loader).
 
@@ -33,7 +33,7 @@ The version on the Decky store (1.8.x) is the old upstream release and no longer
 
 ## Features
 
-DeckFAQs supports both rich-text and plain-text guides from GameFAQs.
+DeckFAQs supports both rich-text and plain-text guides from GameFAQs, and Neoseeker's wiki walkthroughs, user-submitted FAQs and map images. Selecting a game searches both sites and lists the hits under a header per site; the **Guide source** setting on the games screen (next to dark mode) restricts the search to one of them.
 
 ### Game List
 
