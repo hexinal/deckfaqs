@@ -20,8 +20,12 @@ const GUIDE_SANITIZE = {
         'select',
         'textarea',
         'template',
+        // Image maps would navigate the Steam window; only <a> links are handled.
+        'map',
+        'area',
     ],
-    FORBID_ATTR: ['srcset', 'sizes', 'background', 'poster', 'action'],
+    // Inline styles are dropped too (guides get the viewer's styling).
+    FORBID_ATTR: ['style', 'srcset', 'sizes', 'background', 'poster', 'action'],
 };
 
 /** Sanitises scraped guide markup for the viewer. */

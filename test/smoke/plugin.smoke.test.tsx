@@ -309,7 +309,12 @@ describe('DeckFAQs bundle', () => {
             ).not.toBeNull();
             const next = faq.querySelector('.neo-nav a')!;
             expect(next.textContent).toMatch(/^Next: /);
-            expect(next.className).toBe('deckfaqs-link neo-next');
+            expect(next.classList.contains('neo-next')).toBe(true);
+            // Guide images are resolved to the site and load lazily.
+            const img = faq.querySelector(
+                'img[src^="https://cdn.staticneo.com/"]'
+            )!;
+            expect(img.getAttribute('loading')).toBe('lazy');
             const toc = screen.getByRole('combobox', { name: 'TOC' });
             const labels = within(toc)
                 .getAllByRole('option')
@@ -376,9 +381,11 @@ describe('DeckFAQs bundle', () => {
                 expect(document.querySelector('#fixture-links')).not.toBeNull()
             );
             await waitFor(() => expect(scroller().scrollTop).toBe(400));
-            // In-guide link back to the landing page.
+            // In-guide link back to the landing page — clicked on an element
+            // nested inside the <a> (links are handled by delegation).
+            expect(screen.getByText('« Home')).toBeInTheDocument();
             cef.loadUrl.mockClear();
-            fireEvent.click(screen.getByText('« Home'));
+            fireEvent.click(screen.getByText('the guide home in bold'));
             await waitFor(() =>
                 expect(cef.loadUrl).toHaveBeenCalledWith(guideUrl)
             );
@@ -537,6 +544,12 @@ describe('DeckFAQs bundle', () => {
         expect(faq.querySelector('[style]')).toBeNull();
         expect(faq.querySelector('[onclick]')).toBeNull();
         expect(faq.querySelector('img[src*="evil.example"]')).toBeNull();
+        // Relative image paths are resolved against GameFAQs and load lazily.
+        const image = faq.querySelector('img.fimg_large')!;
+        expect(image.getAttribute('src')).toBe(
+            'https://gamefaqs.gamespot.com/a/faqs/37/69037-4.png'
+        );
+        expect(image.getAttribute('loading')).toBe('lazy');
         expect(document.title).not.toBe('pwned');
         expect(faq.querySelector('.ftoc')).toBeNull(); // TOC block replaced by the dropdown
         // Dark mode class applied from settings.

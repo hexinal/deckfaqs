@@ -19,12 +19,6 @@ import {
     AppContextProvider,
     type GuideContents,
 } from '../../context/AppContext';
-import parse, {
-    type HTMLReactParserOptions,
-    Element,
-    domToReact,
-    type DOMNode,
-} from 'html-react-parser';
 import { ActionType } from '../../reducers/AppReducer';
 import { getGuideHtml, request } from '../../utils';
 import {
@@ -61,164 +55,130 @@ export const Guide = ({ fullscreen }: GuideProps) => {
         stateRef.current = state;
     }, [state]);
 
-    // Parsing a guide is the expensive part (single-page FAQs run to megabytes),
-    // so `options` must stay stable across anchor jumps, TOC changes and
-    // restores: handlers read the live guide through stateRef, and only the
-    // guide's URL (which decides the site rules) is a dependency.
     const guideUrl = currentGuide?.guideUrl;
-    const options: HTMLReactParserOptions = useMemo(
-        () => ({
-            replace: (domNode) => {
-                if (
-                    domNode instanceof Element &&
-                    domNode.attribs &&
-                    domNode.attribs.style
-                ) {
-                    delete domNode.attribs.style;
+    const guideHtml = currentGuide?.guideHtml ?? '';
+
+    // The guide is inserted as native DOM (a template parse of the already
+    // sanitised HTML), not as React elements: single-page FAQs run to
+    // megabytes and reconciling tens of thousands of elements froze the
+    // panel. React owns only the empty host; its children are ours.
+    // `[name]`/`[id]` nodes are cached here for the reading-position code.
+    const hostRef = useRef<HTMLDivElement | null>(null);
+    const anchorNodesRef = useRef<Element[]>([]);
+    // A ref callback keyed on the HTML: React re-runs it whenever the host
+    // (re)mounts or the guide changes, in the layout phase, before this
+    // component's own effects (scroll to anchor, restore) look at the DOM.
+    const setHost = useCallback(
+        (host: HTMLDivElement | null) => {
+            hostRef.current = host;
+            if (!host) return;
+            const template = document.createElement('template');
+            template.innerHTML = guideHtml;
+            const content = template.content;
+            // Images: resolve relative paths against the guide's site, drop
+            // anything outside that source's image hosts, and let the
+            // browser fetch them lazily (some FAQs embed thousands of icons).
+            const allowed = imageOrigins(sourceOf(guideUrl ?? ''));
+            for (const img of Array.from(content.querySelectorAll('img'))) {
+                let src: string;
+                try {
+                    src = new URL(img.getAttribute('src') ?? '', allowed[0])
+                        .href;
+                } catch {
+                    img.remove();
+                    continue;
                 }
-                if (
-                    domNode instanceof Element &&
-                    domNode.name === 'a' &&
-                    domNode.attribs &&
-                    domNode.attribs.href
-                ) {
-                    const children = domNode.children;
-                    // html-react-parser hands over raw attributes: keep the guide's own
-                    // class (e.g. Neoseeker's prev/next links) next to ours.
-                    const { class: linkClass, ...linkAttribs } =
-                        domNode.attribs;
-                    const className = linkClass
-                        ? `deckfaqs-link ${linkClass}`
-                        : 'deckfaqs-link';
-                    let anchor = '';
-                    if (domNode.attribs.href.startsWith('#')) {
-                        anchor = domNode.attribs.href.substring(1);
-                        return (
-                            <a
-                                {...linkAttribs}
-                                className={className}
-                                onClick={(e) => {
-                                    e.preventDefault();
-                                    dispatch({
-                                        type: ActionType.UPDATE_GUIDE,
-                                        payload: {
-                                            ...stateRef.current.currentGuide,
-                                            anchor,
-                                            restore: undefined,
-                                        },
-                                    });
-                                }}
-                            >
-                                {domToReact(children as DOMNode[], options)}
-                            </a>
-                        );
-                    } else {
-                        anchor = domNode.attribs.href;
-                        return (
-                            <a
-                                {...linkAttribs}
-                                className={className}
-                                onClick={(e) => {
-                                    e.preventDefault();
-                                    const guide = stateRef.current.currentGuide;
-                                    const baseUrl = guide?.guideUrl ?? '';
-                                    const linkTarget = pageOf(baseUrl, anchor);
-                                    if (
-                                        linkTarget.anchor !== '' &&
-                                        linkTarget.page === (guide?.page ?? '')
-                                    ) {
-                                        // A section of this very page: scroll, don't reload.
-                                        dispatch({
-                                            type: ActionType.UPDATE_GUIDE,
-                                            payload: {
-                                                ...guide,
-                                                anchor: linkTarget.anchor,
-                                                restore: undefined,
-                                            },
-                                        });
-                                        return;
-                                    }
-                                    request(
-                                        { browserView, dispatch },
-                                        (ctx) => {
-                                            dispatch({
-                                                type: ActionType.UPDATE_LOADING,
-                                                payload: true,
-                                            });
-                                            return getGuideHtml(
-                                                pageUrl(baseUrl, anchor),
-                                                ctx
-                                            );
-                                        },
-                                        ({ html }) => {
-                                            const target = pageOf(
-                                                baseUrl,
-                                                anchor
-                                            );
-                                            dispatch({
-                                                type: ActionType.UPDATE_GUIDE,
-                                                payload: {
-                                                    ...guide,
-                                                    guideHtml: html,
-                                                    anchor: target.anchor,
-                                                    page: target.page,
-                                                    // Keep the TOC dropdown on the page we landed on.
-                                                    currentTocSection:
-                                                        tocSectionFor(
-                                                            guide?.guideToc,
-                                                            baseUrl,
-                                                            target.page
-                                                        ) ??
-                                                        guide?.currentTocSection,
-                                                    restore: undefined,
-                                                },
-                                            });
-                                        }
-                                    );
-                                }}
-                            >
-                                {domToReact(children as DOMNode[], options)}
-                            </a>
-                        );
-                    }
-                } else if (
-                    domNode instanceof Element &&
-                    domNode.name === 'div' &&
-                    domNode.attribs &&
-                    domNode.attribs.class === 'ftoc'
-                ) {
-                    return <span></span>;
-                } else if (
-                    domNode instanceof Element &&
-                    domNode.name === 'img' &&
-                    domNode.attribs &&
-                    domNode.attribs.src
-                ) {
-                    // Resolve relative image paths against the guide's site; drop
-                    // anything outside that source's image hosts.
-                    const allowed = imageOrigins(sourceOf(guideUrl ?? ''));
-                    let src: string;
-                    try {
-                        src = new URL(domNode.attribs.src, allowed[0]).href;
-                    } catch {
-                        return <></>;
-                    }
-                    if (!allowed.some((origin) => src.startsWith(`${origin}/`)))
-                        return <></>;
-                    const { class: className, ...attribs } = domNode.attribs;
-                    return <img {...attribs} className={className} src={src} />;
+                if (!allowed.some((origin) => src.startsWith(`${origin}/`))) {
+                    img.remove();
+                    continue;
                 }
-                return domNode;
-            },
-        }),
-        [guideUrl, browserView, dispatch]
+                img.setAttribute('src', src);
+                img.setAttribute('loading', 'lazy');
+                img.setAttribute('decoding', 'async');
+            }
+            // GameFAQs' inline TOC is replaced by the dropdown.
+            for (const toc of Array.from(content.querySelectorAll('.ftoc'))) {
+                toc.remove();
+            }
+            host.textContent = '';
+            host.append(content);
+            anchorNodesRef.current = Array.from(
+                host.querySelectorAll('[name], [id]')
+            );
+        },
+        [guideHtml, guideUrl]
     );
 
-    // The parsed guide: recomputed only when the HTML (or the site rules) change.
-    const guideHtml = currentGuide?.guideHtml ?? '';
-    const content = useMemo(
-        () => parse(guideHtml, options),
-        [guideHtml, options]
+    // Links are handled by delegation: one listener on the host instead of a
+    // handler per anchor. Handlers read the live guide through stateRef.
+    const onGuideClick = useCallback(
+        (e: React.MouseEvent<HTMLDivElement>) => {
+            const host = hostRef.current;
+            const target = e.target as Element | null;
+            const link = target?.closest('a[href]');
+            if (!host || !link || !host.contains(link)) return;
+            e.preventDefault();
+            const href = link.getAttribute('href') ?? '';
+            const guide = stateRef.current.currentGuide;
+            if (href.startsWith('#')) {
+                dispatch({
+                    type: ActionType.UPDATE_GUIDE,
+                    payload: {
+                        ...guide,
+                        anchor: href.substring(1),
+                        restore: undefined,
+                    },
+                });
+                return;
+            }
+            const baseUrl = guide?.guideUrl ?? '';
+            const linkTarget = pageOf(baseUrl, href);
+            if (
+                linkTarget.anchor !== '' &&
+                linkTarget.page === (guide?.page ?? '')
+            ) {
+                // A section of this very page: scroll, don't reload.
+                dispatch({
+                    type: ActionType.UPDATE_GUIDE,
+                    payload: {
+                        ...guide,
+                        anchor: linkTarget.anchor,
+                        restore: undefined,
+                    },
+                });
+                return;
+            }
+            request(
+                { browserView, dispatch },
+                (ctx) => {
+                    dispatch({
+                        type: ActionType.UPDATE_LOADING,
+                        payload: true,
+                    });
+                    return getGuideHtml(pageUrl(baseUrl, href), ctx);
+                },
+                ({ html }) => {
+                    dispatch({
+                        type: ActionType.UPDATE_GUIDE,
+                        payload: {
+                            ...guide,
+                            guideHtml: html,
+                            anchor: linkTarget.anchor,
+                            page: linkTarget.page,
+                            // Keep the TOC dropdown on the page we landed on.
+                            currentTocSection:
+                                tocSectionFor(
+                                    guide?.guideToc,
+                                    baseUrl,
+                                    linkTarget.page
+                                ) ?? guide?.currentTocSection,
+                            restore: undefined,
+                        },
+                    });
+                }
+            );
+        },
+        [browserView, dispatch]
     );
 
     const handleDismiss = useCallback(
@@ -255,11 +215,9 @@ export const Guide = ({ fullscreen }: GuideProps) => {
     // Every `[name]`/`[id]` in the guide with its top in scroll-container
     // coordinates, sorted — the candidates for anchor-based positions.
     const getAnchorTops = useCallback((el: HTMLElement): AnchorTop[] => {
-        const root = guideDiv.current;
-        if (!root) return [];
         const base = el.getBoundingClientRect().top - el.scrollTop;
         const out: AnchorTop[] = [];
-        for (const node of root.querySelectorAll('[name], [id]')) {
+        for (const node of anchorNodesRef.current) {
             const name = node.getAttribute('name') || node.getAttribute('id');
             if (!name) continue;
             out.push({ name, top: node.getBoundingClientRect().top - base });
@@ -282,7 +240,7 @@ export const Guide = ({ fullscreen }: GuideProps) => {
                 } catch {
                     // not percent-encoded
                 }
-                let elementToScrollTo: globalThis.Element | null = null;
+                let elementToScrollTo: Element | null = null;
                 for (const candidate of candidates) {
                     const escaped = CSS.escape(candidate);
                     elementToScrollTo =
@@ -532,7 +490,7 @@ export const Guide = ({ fullscreen }: GuideProps) => {
                       .ffaq p {
                         line-height: 20px;
                       }
-                      .deckfaqs-link {
+                      .deckfaqs_guide a[href] {
                         color: blue !important;
                       }
                       .ffaq div.section_box,
@@ -937,12 +895,12 @@ export const Guide = ({ fullscreen }: GuideProps) => {
                             ].join(' ')}
                             ref={guideDiv}
                         >
-                            {content}
+                            <div ref={setHost} onClick={onGuideClick} />
                         </Focusable>
                     </ScrollPanel>
                 </>
             ),
-        [content, isLoading, error, fullscreen, state.darkMode]
+        [setHost, onGuideClick, isLoading, error, fullscreen, state.darkMode]
     );
 };
 
