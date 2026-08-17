@@ -17,7 +17,7 @@ import {
     type RenderResult,
 } from '@testing-library/react';
 import * as React from 'react';
-import { afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { cef, deckyApi, loadPlugin, routes, steam } from './env';
 
 type Plugin = Awaited<ReturnType<typeof loadPlugin>>;
@@ -343,6 +343,18 @@ describe('DeckFAQs bundle', () => {
             expect(page.querySelector('.neo-nav a')?.textContent).toBe(
                 '« Home'
             );
+            // An absolute link to a section of this very page scrolls without a reload.
+            cef.loadUrl.mockClear();
+            const scroll = vi.spyOn(Element.prototype, 'scrollIntoView');
+            fireEvent.click(
+                screen.getByText("this page's Cobblestone Tor section")
+            );
+            await waitFor(() => expect(scroll).toHaveBeenCalled());
+            expect(scroll.mock.instances[0]).toBe(
+                document.querySelector('#faqwrap [id="Cobblestone_Tor"]')
+            );
+            expect(cef.loadUrl).not.toHaveBeenCalled();
+            scroll.mockRestore();
             expect(screen.getByRole('combobox', { name: 'TOC' })).toHaveValue(
                 subPage
             );

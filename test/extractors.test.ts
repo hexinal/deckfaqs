@@ -281,6 +281,7 @@ describe('neoGuideCode (Neoseeker wiki and FAQ pages)', () => {
             'https://www.neoseeker.com/dragon-quest-xi/Adventures_with_Erik',
             'https://www.neoseeker.com/dragon-quest-xi/Heliodor#Sewers',
             '#Cobblestone_Tor',
+            'https://www.neoseeker.com/dragon-quest-xi/Coming_of_Age:_The_Prologue#Cobblestone_Tor',
         ]);
         expect(links.textContent).toContain('the game hub');
         expect(links.textContent).toContain('an external site');

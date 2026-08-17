@@ -122,6 +122,22 @@ export const Guide = ({ fullscreen }: GuideProps) => {
                                     e.preventDefault();
                                     const guide = stateRef.current.currentGuide;
                                     const baseUrl = guide?.guideUrl ?? '';
+                                    const linkTarget = pageOf(baseUrl, anchor);
+                                    if (
+                                        linkTarget.anchor !== '' &&
+                                        linkTarget.page === (guide?.page ?? '')
+                                    ) {
+                                        // A section of this very page: scroll, don't reload.
+                                        dispatch({
+                                            type: ActionType.UPDATE_GUIDE,
+                                            payload: {
+                                                ...guide,
+                                                anchor: linkTarget.anchor,
+                                                restore: undefined,
+                                            },
+                                        });
+                                        return;
+                                    }
                                     request(
                                         { browserView, dispatch },
                                         (ctx) => {

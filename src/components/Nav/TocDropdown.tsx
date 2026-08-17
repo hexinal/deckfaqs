@@ -20,8 +20,15 @@ export const TocDropdown = ({ style }: TocDropdownProps) => {
         let anchor: string | undefined = undefined;
         const guideUrl = currentGuide?.guideUrl ?? '';
         const href = pageUrl(guideUrl, path);
-        if (path.startsWith('#')) {
-            anchor = path.substring(1);
+        const target = pageOf(guideUrl, path);
+        // A section of the page already shown (bare `#x`, or `<page>#x` while
+        // on that page): just scroll, no reload.
+        const samePage =
+            path.startsWith('#') ||
+            (target.anchor !== '' &&
+                target.page === (currentGuide?.page ?? ''));
+        if (samePage) {
+            anchor = target.anchor;
             dispatch({
                 type: ActionType.UPDATE_GUIDE,
                 payload: {
