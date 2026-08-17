@@ -5,6 +5,7 @@ import { AppContext } from '../../context/AppContext';
 import { ActionType } from '../../reducers/AppReducer';
 import { SETTINGS, ignoreNonSteam, ignoreSteam } from '../../constants';
 import { loadPositions } from '../../positions';
+import { isGuideSource } from '../../sources/source';
 import { Nav } from '../Nav/Nav';
 import { MainView } from './MainView';
 
@@ -133,11 +134,18 @@ export const App = () => {
             .then((result) => {
                 const settings = JSON.parse(result as string) as {
                     darkMode: boolean;
+                    source?: unknown;
                 };
                 dispatch({
                     type: ActionType.UPDATE_DARK_MODE,
                     payload: settings.darkMode,
                 });
+                if (isGuideSource(settings.source)) {
+                    dispatch({
+                        type: ActionType.UPDATE_SOURCE,
+                        payload: settings.source,
+                    });
+                }
             })
             .catch(() => {
                 dispatch({

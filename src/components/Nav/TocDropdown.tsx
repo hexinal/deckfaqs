@@ -3,6 +3,7 @@ import { useContext, type CSSProperties } from 'react';
 import { AppContext } from '../../context/AppContext';
 import { ActionType } from '../../reducers/AppReducer';
 import { getGuideHtml, request } from '../../utils';
+import { pageOf, pageUrl } from '../../sources/source';
 
 type TocDropdownProps = {
     style?: CSSProperties;
@@ -17,9 +18,17 @@ export const TocDropdown = ({ style }: TocDropdownProps) => {
     const handleTOCChange = (data: SingleDropdownOption) => {
         const path = data.data as string;
         let anchor: string | undefined = undefined;
-        const href = `${currentGuide?.guideUrl}/${path}`;
-        if (path.startsWith('#')) {
-            anchor = path.substring(1);
+        const guideUrl = currentGuide?.guideUrl ?? '';
+        const href = pageUrl(guideUrl, path);
+        const target = pageOf(guideUrl, path);
+        // A section of the page already shown (bare `#x`, or `<page>#x` while
+        // on that page): just scroll, no reload.
+        const samePage =
+            path.startsWith('#') ||
+            (target.anchor !== '' &&
+                target.page === (currentGuide?.page ?? ''));
+        if (samePage) {
+            anchor = target.anchor;
             dispatch({
                 type: ActionType.UPDATE_GUIDE,
                 payload: {
@@ -49,7 +58,7 @@ export const TocDropdown = ({ style }: TocDropdownProps) => {
                             ...currentGuide,
                             guideHtml: html,
                             anchor,
-                            page: path.split('#')[0],
+                            page: pageOf(guideUrl, path).page,
                             currentTocSection: path,
                             restore: undefined,
                         },

@@ -5,6 +5,8 @@ import type {
     PluginState,
     TAppState,
 } from '../context/AppContext';
+import type { GuideSource } from '../sources/source';
+import type { SearchOutcome } from '../utils';
 
 export const ActionType = {
     UPDATE_PLUGIN_STATE: 'UPDATE_PLUGIN_STATE',
@@ -16,6 +18,7 @@ export const ActionType = {
     BACK: 'BACK',
     BACK_TO_STATE: 'BACK_TO_STATE',
     UPDATE_DARK_MODE: 'UPDATE_DARK_MODE',
+    UPDATE_SOURCE: 'UPDATE_SOURCE',
     UPDATE_LOADING: 'UPDATE_LOADING',
     UPDATE_SEARCH: 'UPDATE_SEARCH',
     UPDATE_ERROR: 'UPDATE_ERROR',
@@ -32,6 +35,7 @@ export type AppActions =
     | BackAction
     | BackToStateAction
     | UpdateDarkModeAction
+    | UpdateSourceAction
     | UpdateLoadingAction
     | UpdateSearchAction
     | UpdateErrorAction;
@@ -64,7 +68,7 @@ type UpdatePluginStateAction = {
 
 type UpdateResultsAction = {
     type: typeof ActionType.UPDATE_RESULTS;
-    payload: ListItem[];
+    payload: SearchOutcome;
 };
 
 type UpdateGamesAction = {
@@ -99,6 +103,10 @@ type UpdateDarkModeAction = {
     type: typeof ActionType.UPDATE_DARK_MODE;
     payload: boolean;
 };
+type UpdateSourceAction = {
+    type: typeof ActionType.UPDATE_SOURCE;
+    payload: GuideSource;
+};
 
 export const appReducer = (state: TAppState, action: AppActions): TAppState => {
     switch (action.type) {
@@ -122,7 +130,9 @@ export const appReducer = (state: TAppState, action: AppActions): TAppState => {
                 ...state,
                 error: undefined,
                 isLoading: false,
-                searchResults: action.payload,
+                searchResults: action.payload.results,
+                searchTerm: action.payload.term,
+                searchNotice: action.payload.notice,
                 pluginState: 'results',
             };
         case ActionType.UPDATE_GUIDES:
@@ -183,6 +193,11 @@ export const appReducer = (state: TAppState, action: AppActions): TAppState => {
             return {
                 ...state,
                 darkMode: action.payload,
+            };
+        case ActionType.UPDATE_SOURCE:
+            return {
+                ...state,
+                source: action.payload,
             };
         case ActionType.UPDATE_LOADING:
             return {

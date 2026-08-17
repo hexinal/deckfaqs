@@ -3,6 +3,7 @@ import React, { createContext, useReducer } from 'react';
 import type { ListItem } from '../components/List/List';
 import type { GuidePosition } from '../positions';
 import { type AppActions, appReducer } from '../reducers/AppReducer';
+import type { GuideSource } from '../sources/source';
 
 export type PluginState = 'games' | 'results' | 'guides' | 'guide';
 
@@ -40,9 +41,15 @@ export type TAppState = {
     pluginState: PluginState;
     games: ListItem[];
     searchResults: ListItem[];
+    /** The game name the current searchResults were fetched for (Retry re-runs it). */
+    searchTerm: string;
+    /** One site failed while the other returned results; shown above them. */
+    searchNotice?: string;
     guides: ListItem[];
     runningGame?: string;
     darkMode: boolean;
+    /** Which site(s) a game search queries; persisted with darkMode. */
+    source: GuideSource;
     isLoading: boolean;
     /** Message of the last failed fetch, shown with a Retry button. */
     error?: string;
@@ -61,10 +68,13 @@ export const initialState: TAppState = {
     pluginState: 'games',
     games: [],
     searchResults: [],
+    searchTerm: '',
+    searchNotice: undefined,
     guides: [],
     runningGame: undefined,
     currentGuide: undefined,
     darkMode: false,
+    source: 'both',
     isLoading: false,
     error: undefined,
     search: initSearchState,

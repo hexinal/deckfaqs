@@ -4,8 +4,10 @@ import {
     Navigation,
     QuickAccessTab,
     Router,
+    findSP,
+    showModal,
 } from '@decky/ui';
-import { routerHook } from '@decky/api';
+import { routerHook, useQuickAccessVisible } from '@decky/api';
 import {
     useCallback,
     useContext,
@@ -18,16 +20,22 @@ import {
     AppContext,
     AppContextProvider,
     type GuideContents,
+    type TableOfContentEntry,
 } from '../../context/AppContext';
-import parse, {
-    type HTMLReactParserOptions,
-    Element,
-    domToReact,
-    type DOMNode,
-} from 'html-react-parser';
 import { ActionType } from '../../reducers/AppReducer';
-import { getGuideHtml, request } from '../../utils';
-import { GAMEFAQS_ORIGIN } from '../../constants';
+import {
+    getGuideHtml,
+    prefetchDelayMs,
+    prefetchGuidePage,
+    request,
+} from '../../utils';
+import {
+    imageOrigins,
+    pageOf,
+    pageUrl,
+    sourceOf,
+    tocSectionFor,
+} from '../../sources/source';
 import {
     type AnchorTop,
     getPosition,
@@ -39,7 +47,11 @@ import { TocDropdown } from '../Nav/TocDropdown';
 import { Search } from '../Nav/Search';
 import { ScrollPanel } from '../ScrollPanel';
 import { ErrorMessage } from '../ErrorMessage';
+import { MediaModal, mediaOf } from './MediaModal';
 import Mark from './mark';
+
+/** Lightbox metadata the extractor leaves on <img> (checked like `src`). */
+const MEDIA_ATTRS = ['data-full', 'data-video-mp4', 'data-video-webm'];
 
 type GuideProps = {
     fullscreen?: boolean;
@@ -55,122 +67,164 @@ export const Guide = ({ fullscreen }: GuideProps) => {
         stateRef.current = state;
     }, [state]);
 
-    const options: HTMLReactParserOptions = useMemo(
-        () => ({
-            replace: (domNode) => {
-                if (
-                    domNode instanceof Element &&
-                    domNode.attribs &&
-                    domNode.attribs.style
-                ) {
-                    delete domNode.attribs.style;
+    const guideUrl = currentGuide?.guideUrl;
+    const guideHtml = currentGuide?.guideHtml ?? '';
+
+    // The guide is inserted as native DOM (a template parse of the already
+    // sanitised HTML), not as React elements: single-page FAQs run to
+    // megabytes and reconciling tens of thousands of elements froze the
+    // panel. React owns only the empty host; its children are ours.
+    // `[name]`/`[id]` nodes are cached here for the reading-position code.
+    const hostRef = useRef<HTMLDivElement | null>(null);
+    const anchorNodesRef = useRef<Element[]>([]);
+    // A ref callback keyed on the HTML: React re-runs it whenever the host
+    // (re)mounts or the guide changes, in the layout phase, before this
+    // component's own effects (scroll to anchor, restore) look at the DOM.
+    const setHost = useCallback(
+        (host: HTMLDivElement | null) => {
+            hostRef.current = host;
+            if (!host) return;
+            const template = document.createElement('template');
+            template.innerHTML = guideHtml;
+            const content = template.content;
+            // Images: resolve relative paths against the guide's site, drop
+            // anything outside that source's image hosts, and let the
+            // browser fetch them lazily (some FAQs embed thousands of icons).
+            const allowed = imageOrigins(sourceOf(guideUrl ?? ''));
+            const resolveAllowed = (raw: string): string | undefined => {
+                try {
+                    const href = new URL(raw, allowed[0]).href;
+                    return allowed.some((origin) =>
+                        href.startsWith(`${origin}/`)
+                    )
+                        ? href
+                        : undefined;
+                } catch {
+                    return undefined;
                 }
-                if (
-                    domNode instanceof Element &&
-                    domNode.name === 'a' &&
-                    domNode.attribs &&
-                    domNode.attribs.href
-                ) {
-                    const children = domNode.children;
-                    let anchor = '';
-                    if (domNode.attribs.href.startsWith('#')) {
-                        anchor = domNode.attribs.href.substring(1);
-                        return (
-                            <a
-                                {...domNode.attribs}
-                                className="deckfaqs-link"
-                                onClick={(e) => {
-                                    e.preventDefault();
-                                    dispatch({
-                                        type: ActionType.UPDATE_GUIDE,
-                                        payload: {
-                                            ...currentGuide,
-                                            anchor,
-                                            restore: undefined,
-                                        },
-                                    });
-                                }}
-                            >
-                                {domToReact(children as DOMNode[])}
-                            </a>
-                        );
-                    } else {
-                        anchor = domNode.attribs.href;
-                        return (
-                            <a
-                                {...domNode.attribs}
-                                className="deckfaqs-link"
-                                onClick={(e) => {
-                                    e.preventDefault();
-                                    const baseUrl =
-                                        currentGuide?.guideUrl ?? '';
-                                    request(
-                                        { browserView, dispatch },
-                                        (ctx) => {
-                                            dispatch({
-                                                type: ActionType.UPDATE_LOADING,
-                                                payload: true,
-                                            });
-                                            return getGuideHtml(
-                                                `${baseUrl}/${anchor}`,
-                                                ctx
-                                            );
-                                        },
-                                        ({ html }) => {
-                                            const page = anchor.split('#')[0];
-                                            if (anchor.indexOf('#') > 0) {
-                                                anchor = anchor.substring(
-                                                    anchor.indexOf('#') + 1
-                                                );
-                                            } else {
-                                                anchor = '';
-                                            }
-                                            dispatch({
-                                                type: ActionType.UPDATE_GUIDE,
-                                                payload: {
-                                                    ...currentGuide,
-                                                    guideHtml: html,
-                                                    anchor,
-                                                    page,
-                                                    restore: undefined,
-                                                },
-                                            });
-                                        }
-                                    );
-                                }}
-                            >
-                                {domToReact(children as DOMNode[])}
-                            </a>
-                        );
-                    }
-                } else if (
-                    domNode instanceof Element &&
-                    domNode.name === 'div' &&
-                    domNode.attribs &&
-                    domNode.attribs.class === 'ftoc'
-                ) {
-                    return <span></span>;
-                } else if (
-                    domNode instanceof Element &&
-                    domNode.name === 'img' &&
-                    domNode.attribs &&
-                    domNode.attribs.src
-                ) {
-                    // Resolve relative image paths against GameFAQs; drop anything off-origin.
-                    let src: string;
-                    try {
-                        src = new URL(domNode.attribs.src, GAMEFAQS_ORIGIN)
-                            .href;
-                    } catch {
-                        return <></>;
-                    }
-                    if (!src.startsWith(`${GAMEFAQS_ORIGIN}/`)) return <></>;
-                    return <img {...domNode.attribs} src={src} />;
+            };
+            for (const img of Array.from(content.querySelectorAll('img'))) {
+                const src = resolveAllowed(img.getAttribute('src') ?? '');
+                if (!src) {
+                    img.remove();
+                    continue;
                 }
-                return domNode;
-            },
-        }),
-        [currentGuide, browserView, dispatch]
+                img.setAttribute('src', src);
+                img.setAttribute('loading', 'lazy');
+                img.setAttribute('decoding', 'async');
+                // Lightbox URLs get the same treatment; unusable ones are dropped.
+                for (const attr of MEDIA_ATTRS) {
+                    const raw = img.getAttribute(attr);
+                    if (raw === null) continue;
+                    const href = resolveAllowed(raw);
+                    if (href) img.setAttribute(attr, href);
+                    else img.removeAttribute(attr);
+                }
+                // A playable clip: the poster gets a play badge (CSS on the wrapper).
+                if (img.dataset.videoMp4 || img.dataset.videoWebm) {
+                    const wrap = document.createElement('span');
+                    wrap.className = 'neo-video-wrap';
+                    img.replaceWith(wrap);
+                    wrap.append(img);
+                }
+            }
+            // GameFAQs' inline TOC is replaced by the dropdown.
+            for (const toc of Array.from(content.querySelectorAll('.ftoc'))) {
+                toc.remove();
+            }
+            host.textContent = '';
+            host.append(content);
+            anchorNodesRef.current = Array.from(
+                host.querySelectorAll('[name], [id]')
+            );
+        },
+        [guideHtml, guideUrl]
+    );
+
+    // Links are handled by delegation: one listener on the host instead of a
+    // handler per anchor. Handlers read the live guide through stateRef.
+    const onGuideClick = useCallback(
+        (e: React.MouseEvent<HTMLDivElement>) => {
+            const host = hostRef.current;
+            const target = e.target as Element | null;
+            if (!host) return;
+            // Tapping an image or clip poster opens it in the lightbox.
+            const img = target?.closest('img');
+            if (img && host.contains(img)) {
+                e.preventDefault();
+                showModal(
+                    <MediaModal
+                        media={mediaOf(img)}
+                        reopenQuickAccess={!fullscreen}
+                    />,
+                    findSP()
+                );
+                return;
+            }
+            const link = target?.closest('a[href]');
+            if (!link || !host.contains(link)) return;
+            e.preventDefault();
+            const href = link.getAttribute('href') ?? '';
+            const guide = stateRef.current.currentGuide;
+            if (href.startsWith('#')) {
+                dispatch({
+                    type: ActionType.UPDATE_GUIDE,
+                    payload: {
+                        ...guide,
+                        anchor: href.substring(1),
+                        restore: undefined,
+                    },
+                });
+                return;
+            }
+            const baseUrl = guide?.guideUrl ?? '';
+            const linkTarget = pageOf(baseUrl, href);
+            if (
+                linkTarget.anchor !== '' &&
+                linkTarget.page === (guide?.page ?? '')
+            ) {
+                // A section of this very page: scroll, don't reload.
+                dispatch({
+                    type: ActionType.UPDATE_GUIDE,
+                    payload: {
+                        ...guide,
+                        anchor: linkTarget.anchor,
+                        restore: undefined,
+                    },
+                });
+                return;
+            }
+            request(
+                { browserView, dispatch },
+                (ctx) => {
+                    dispatch({
+                        type: ActionType.UPDATE_LOADING,
+                        payload: true,
+                    });
+                    return getGuideHtml(pageUrl(baseUrl, href), ctx);
+                },
+                ({ html }) => {
+                    dispatch({
+                        type: ActionType.UPDATE_GUIDE,
+                        payload: {
+                            ...guide,
+                            guideHtml: html,
+                            anchor: linkTarget.anchor,
+                            page: linkTarget.page,
+                            // Keep the TOC dropdown on the page we landed on.
+                            currentTocSection:
+                                tocSectionFor(
+                                    guide?.guideToc,
+                                    baseUrl,
+                                    linkTarget.page
+                                ) ?? guide?.currentTocSection,
+                            restore: undefined,
+                        },
+                    });
+                }
+            );
+        },
+        [browserView, dispatch, fullscreen]
     );
 
     const handleDismiss = useCallback(
@@ -207,11 +261,9 @@ export const Guide = ({ fullscreen }: GuideProps) => {
     // Every `[name]`/`[id]` in the guide with its top in scroll-container
     // coordinates, sorted — the candidates for anchor-based positions.
     const getAnchorTops = useCallback((el: HTMLElement): AnchorTop[] => {
-        const root = guideDiv.current;
-        if (!root) return [];
         const base = el.getBoundingClientRect().top - el.scrollTop;
         const out: AnchorTop[] = [];
-        for (const node of root.querySelectorAll('[name], [id]')) {
+        for (const node of anchorNodesRef.current) {
             const name = node.getAttribute('name') || node.getAttribute('id');
             if (!name) continue;
             out.push({ name, top: node.getBoundingClientRect().top - base });
@@ -225,19 +277,40 @@ export const Guide = ({ fullscreen }: GuideProps) => {
         (anchor: string = '') => {
             if (anchor.length > 0) {
                 // Anchors come from guide markup; escape so odd characters can't
-                // break the selector and throw.
-                const escaped = CSS.escape(anchor);
-                const elementToScrollTo =
-                    guideDiv.current?.querySelector(`[name="${escaped}"]`) ??
-                    guideDiv.current?.querySelector(`[id="${escaped}"]`);
+                // break the selector and throw. Like a browser, try the
+                // percent-decoded form first (wiki links encode UTF-8 fragments).
+                const candidates = [anchor];
+                try {
+                    const decoded = decodeURIComponent(anchor);
+                    if (decoded !== anchor) candidates.unshift(decoded);
+                } catch {
+                    // not percent-encoded
+                }
+                let elementToScrollTo: Element | null = null;
+                for (const candidate of candidates) {
+                    const escaped = CSS.escape(candidate);
+                    elementToScrollTo =
+                        guideDiv.current?.querySelector(
+                            `[name="${escaped}"]`
+                        ) ??
+                        guideDiv.current?.querySelector(`[id="${escaped}"]`) ??
+                        null;
+                    if (elementToScrollTo) break;
+                }
+                const guide = stateRef.current.currentGuide;
                 if (elementToScrollTo) {
                     elementToScrollTo.scrollIntoView();
-                } else {
-                    const guide = stateRef.current.currentGuide;
-                    const baseUrl = guide?.guideUrl ?? '';
+                } else if (
+                    guide?.page &&
+                    sourceOf(guide.guideUrl ?? '') === 'gamefaqs'
+                ) {
+                    // GameFAQs only: a bare #anchor may live on the guide's first
+                    // page. Wiki fragments are page-local, so a miss stays put.
+                    const baseUrl = guide.guideUrl ?? '';
                     request(
                         { browserView, dispatch },
-                        (ctx) => getGuideHtml(`${baseUrl}/#${anchor}`, ctx),
+                        (ctx) =>
+                            getGuideHtml(pageUrl(baseUrl, `#${anchor}`), ctx),
                         ({ html }) => {
                             dispatch({
                                 type: ActionType.UPDATE_GUIDE,
@@ -329,7 +402,6 @@ export const Guide = ({ fullscreen }: GuideProps) => {
     // and flush the last known one when this view goes away (Back, fullscreen
     // dismiss, plugin unload). Layout effect: its cleanup runs while the
     // element is still in the document, so the final measurement is real.
-    const guideUrl = currentGuide?.guideUrl;
     const page = currentGuide?.page ?? '';
     useLayoutEffect(() => {
         const el = getScrollElement();
@@ -371,6 +443,31 @@ export const Guide = ({ fullscreen }: GuideProps) => {
             }
         };
     }, [guideUrl, page, isLoading, error, getScrollElement, getAnchorTops]);
+
+    // Prefetch the next page of a multi-page guide once this one has been on
+    // screen for a moment (Neoseeker's prev/next links; GameFAQs' ?page=N+1
+    // when the TOC references it), so a Next click is instant.
+    const qamVisible = useQuickAccessVisible();
+    useEffect(() => {
+        if (!guideHtml || isLoading || error || !(fullscreen || qamVisible))
+            return;
+        const timer = setTimeout(() => {
+            const guide = stateRef.current.currentGuide;
+            const url = guide?.guideUrl;
+            if (!url) return;
+            const next = nextPageOf(hostRef.current, guide);
+            if (next) prefetchGuidePage(pageUrl(url, next), browserView);
+        }, prefetchDelayMs());
+        return () => clearTimeout(timer);
+    }, [
+        guideHtml,
+        page,
+        isLoading,
+        error,
+        fullscreen,
+        qamVisible,
+        browserView,
+    ]);
 
     // Restore a saved position: `restore` is set when the guide is opened
     // from the list (or handed back from fullscreen); on first mount fall back
@@ -450,8 +547,40 @@ export const Guide = ({ fullscreen }: GuideProps) => {
                       .deckfaqs_dark {
                         filter: invert(1)
                       }
-                      .deckfaqs_dark img:not(.ignore-color-scheme),video:not(.ignore-color-scheme) {
+                      .deckfaqs_dark img:not(.ignore-color-scheme) {
                         filter: brightness(50%) invert(100%);
+                      }
+                      .deckfaqs_guide img {
+                        cursor: pointer;
+                      }
+                      .ffaq .neo-video-wrap {
+                        position: relative;
+                        display: inline-block;
+                        max-width: 100%;
+                        line-height: 0;
+                      }
+                      .ffaq .neo-video-wrap::after {
+                        content: '';
+                        position: absolute;
+                        left: 50%;
+                        top: 50%;
+                        width: 44px;
+                        height: 44px;
+                        border-radius: 50%;
+                        background: rgba(0, 0, 0, 0.55);
+                        transform: translate(-50%, -50%);
+                        pointer-events: none;
+                      }
+                      .ffaq .neo-video-wrap::before {
+                        content: '';
+                        position: absolute;
+                        left: calc(50% - 6px);
+                        top: calc(50% - 10px);
+                        border-left: 16px solid #fff;
+                        border-top: 10px solid transparent;
+                        border-bottom: 10px solid transparent;
+                        z-index: 1;
+                        pointer-events: none;
                       }
                       .deckfaqs_dark .deckfaqs_highlight {
                         filter: invert(1)
@@ -464,7 +593,7 @@ export const Guide = ({ fullscreen }: GuideProps) => {
                       .ffaq p {
                         line-height: 20px;
                       }
-                      .deckfaqs-link {
+                      .deckfaqs_guide a[href] {
                         color: blue !important;
                       }
                       .ffaq div.section_box,
@@ -772,7 +901,75 @@ export const Guide = ({ fullscreen }: GuideProps) => {
                       .ffaq.imgmain img.imgresize {
                         max-width: 100%;
                         width: 100%;
-                      }`}
+                      }
+                      /* Neoseeker: wiki walkthrough pages (MediaWiki markup) */
+                      .ffaq.neo-wiki h1 { font-size: 20px; margin: 0 0 10px; }
+                      .ffaq.neo-wiki h2 { font-size: 17px; margin: 16px 0 6px; }
+                      .ffaq.neo-wiki h3 { font-size: 15px; margin: 14px 0 6px; }
+                      .ffaq.neo-wiki h4 { font-size: 14px; margin: 12px 0 4px; }
+                      .ffaq.neo-wiki center { display: block; text-align: center; }
+                      .ffaq.neo-wiki hr { margin: 12px 0; }
+                      .ffaq.neo-wiki img { max-width: 100%; height: auto; }
+                      .ffaq.neo-wiki .img-icon { vertical-align: middle; }
+                      .ffaq.neo-wiki .icon { display: none; }
+                      .ffaq.neo-wiki .alert {
+                        border: 1px solid #999;
+                        border-left-width: 5px;
+                        padding: 6px 10px;
+                        margin: 10px 0;
+                        background: #eee;
+                      }
+                      .ffaq.neo-wiki .alert-primary,
+                      .ffaq.neo-wiki .alert-info { background: #d9edf7; border-left-color: #3a87ad; }
+                      .ffaq.neo-wiki .alert-success { background: #dff0d8; border-left-color: #468847; }
+                      .ffaq.neo-wiki .alert-error,
+                      .ffaq.neo-wiki .alert-danger { background: #f2dede; border-left-color: #b94a48; }
+                      .ffaq.neo-wiki .alert-secondary { border-left-color: #777; }
+                      .ffaq.neo-wiki .section-info {
+                        border: 1px solid #999;
+                        padding: 6px;
+                        margin: 10px 0;
+                      }
+                      .ffaq.neo-wiki .section-header { font-weight: bold; margin-bottom: 4px; }
+                      .ffaq.neo-wiki #toc {
+                        display: inline-block;
+                        border: 1px solid #aaa;
+                        padding: 6px 10px;
+                        margin: 8px 0;
+                      }
+                      .ffaq.neo-wiki #toc ul { margin: 0; padding-left: 18px; }
+                      .ffaq.neo-wiki .neo-video { max-width: 100%; height: auto; }
+                      .ffaq.neo-wiki table.wikitable,
+                      .ffaq.neo-wiki table.table-list {
+                        width: 100%;
+                        border-collapse: collapse;
+                      }
+                      .deckfaqs_guide_compact .ffaq.neo-wiki table {
+                        display: block;
+                        overflow-x: auto;
+                      }
+                      .ffaq .neo-nav {
+                        display: flex;
+                        justify-content: space-between;
+                        gap: 12px;
+                        margin: 16px 0;
+                        font-weight: bold;
+                      }
+                      .ffaq .neo-nav .neo-next { margin-left: auto; text-align: right; }
+                      /* Neoseeker: user-submitted FAQs (GameFAQs-style markup) */
+                      .ffaq.neo-faq h1 { font-size: 18px; margin: 0 0 6px; }
+                      .ffaq.neo-faq .author_area { font-size: 12px; color: #444; margin-bottom: 10px; }
+                      .ffaq.neo-faq .copyright { font-size: 11px; margin-top: 16px; }
+                      .ffaq.neo-faq .table-wrapper { overflow-x: auto; }
+                      .ffaq.neo-faq img { max-width: 100%; height: auto; }
+                      /* Neoseeker: map images */
+                      .ffaq.neo-image img {
+                        display: block;
+                        max-width: 100%;
+                        height: auto;
+                        margin: 0 auto;
+                      }
+                      .deckfaqs_dark .ffaq.neo-image img { filter: invert(1); }`}
                     </style>
                     <ScrollPanel
                         onOKButton={() => {
@@ -801,13 +998,37 @@ export const Guide = ({ fullscreen }: GuideProps) => {
                             ].join(' ')}
                             ref={guideDiv}
                         >
-                            {parse(currentGuide?.guideHtml ?? '', options)}
+                            <div ref={setHost} onClick={onGuideClick} />
                         </Focusable>
                     </ScrollPanel>
                 </>
             ),
-        [currentGuide, isLoading, error, fullscreen, options, state.darkMode]
+        [setHost, onGuideClick, isLoading, error, fullscreen, state.darkMode]
     );
+};
+
+/** The next page of a guide in `GuideContents.page` form, if it has one. */
+const nextPageOf = (
+    host: HTMLElement | null,
+    guide: GuideContents
+): string | undefined => {
+    const url = guide.guideUrl ?? '';
+    if (sourceOf(url) === 'neoseeker') {
+        const next = host?.querySelector('.neo-nav a.neo-next');
+        const href = next?.getAttribute('href');
+        return href ? pageOf(url, href).page || undefined : undefined;
+    }
+    // GameFAQs: pages are ?page=N under the guide; '' is page 1.
+    const match = /^\?page=(\d+)/.exec(guide.page ?? '');
+    const following = `?page=${(match ? Number(match[1]) : 1) + 1}`;
+    const references = (entries: readonly TableOfContentEntry[]): boolean =>
+        entries.some((entry) =>
+            entry.options
+                ? references(entry.options)
+                : typeof entry.data === 'string' &&
+                  entry.data.startsWith(following)
+        );
+    return references(guide.guideToc ?? []) ? following : undefined;
 };
 
 const navButtonStyle = {

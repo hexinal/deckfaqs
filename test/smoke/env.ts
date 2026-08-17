@@ -22,7 +22,7 @@ type Fn = (...args: unknown[]) => unknown;
 type Props = Record<string, unknown> & { children?: React.ReactNode };
 
 // ---------------------------------------------------------------------------
-// Fixtures: URL path -> HTML the hidden BrowserView "loads".
+// Fixtures: host + URL path -> HTML the hidden BrowserView "loads".
 // ---------------------------------------------------------------------------
 const fixture = (name: string) => readFileSync(`test/fixtures/${name}`, 'utf8');
 
@@ -32,23 +32,68 @@ const searchPayload = JSON.stringify([
 ]);
 
 const pages: Record<string, () => string> = {
-    '/ajax/home_game_search': () =>
+    'gamefaqs.gamespot.com/ajax/home_game_search': () =>
         `<html><body>${searchPayload}</body></html>`,
-    '/ps2/197344-final-fantasy-x/faqs': () =>
+    'gamefaqs.gamespot.com/ps2/197344-final-fantasy-x/faqs': () =>
         fixture('faqs-final-fantasy-x.html'),
-    '/ps2/197344-final-fantasy-x/faqs/69037': () =>
+    'gamefaqs.gamespot.com/ps2/197344-final-fantasy-x/faqs/69037': () =>
         fixture('guide-ffx-69037.html'),
+    'www.neoseeker.com/chrono-trigger/faqs': () =>
+        fixture('neoseeker/faqs-chrono-trigger.html'),
+    'www.neoseeker.com/dragon-quest-xi/faqs': () =>
+        fixture('neoseeker/faqs-dragon-quest-xi.html'),
+    'www.neoseeker.com/dragon-quest-xi/walkthrough': () =>
+        fixture('neoseeker/walkthrough-dragon-quest-xi.html'),
+    'www.neoseeker.com/dragon-quest-xi/Coming_of_Age:_The_Prologue': () =>
+        fixture('neoseeker/wiki-dqxi-coming-of-age.html'),
+    // Redirect target used by the redirect smoke scenario.
+    'www.neoseeker.com/dragon-quest-xi/Coming_of_Age': () =>
+        fixture('neoseeker/wiki-dqxi-coming-of-age.html'),
+    // Next pages reached by the prefetch scenarios.
+    'www.neoseeker.com/dragon-quest-xi/Adventures_with_Erik': () =>
+        fixture('neoseeker/wiki-dqxi-coming-of-age.html'),
+    'www.neoseeker.com/dragon-quest-xi/Fun-Size_Forge': () =>
+        fixture('neoseeker/walkthrough-dragon-quest-xi.html'),
+    'www.neoseeker.com/dragon-quest-xi/faqs/3043257-bestiary.html': () =>
+        fixture('neoseeker/faq-html-dqxi-bestiary.html'),
+    'www.neoseeker.com/chrono-trigger/faqs/131223-o.html': () =>
+        fixture('neoseeker/faq-text-chrono-trigger.html'),
+    // Elden Ring: wiki walkthrough, but no user FAQs, so /faqs/ is a 404.
+    'www.neoseeker.com/elden-ring/faqs': () =>
+        fixture('neoseeker/not-found.html'),
+    'www.neoseeker.com/elden-ring/walkthrough': () =>
+        fixture('neoseeker/walkthrough-dragon-quest-xi.html'),
 };
+
+// Neoseeker's quick-search: static JSONP on its CDN, fetched with fetchNoCors
+// (never through the BrowserView). Keyed by the normalised keyword.
+const qsPayloads: Record<string, string> = {
+    chrono_trigger:
+        'qs({"keywords":"chrono trigger","timestamp":0,"products":[{"id":1,"name":"Chrono Trigger","url":"\\/\\/www.neoseeker.com\\/chrono-trigger\\/"}],"forums":[]});',
+    elden_ring:
+        'qs({"keywords":"elden ring","timestamp":0,"products":[{"id":76523,"name":"Elden Ring","url":"\\/\\/www.neoseeker.com\\/elden-ring\\/walkthrough","image":null}],"forums":[]});',
+    dragon_quest_xi:
+        'qs({"keywords":"dragon quest xi","timestamp":0,"products":[{"id":68295,"name":"Dragon Quest XI: Echoes of an Elusive Age","url":"\\/\\/www.neoseeker.com\\/dragon-quest-xi\\/walkthrough","image":null}],"forums":[]});',
+};
+const qsFor = (kw: string) =>
+    qsPayloads[kw] ??
+    `qs({"keywords":"${kw}","timestamp":0,"products":[],"forums":[]});`;
 
 // ---------------------------------------------------------------------------
 // Fake CEF / hidden BrowserView.
 // ---------------------------------------------------------------------------
 export const cef = {
     currentUrl: '',
-    /** URLs that never finish loading (simulates an offline GameFAQs). */
+    /** URLs that never finish loading (simulates an offline guide site). */
     blackhole: new Set<string>(),
+    /** Hosts whose direct fetches (fetchNoCors) fail (simulates an offline CDN). */
+    offline: new Set<string>(),
+    /** Neoseeker quick-search keywords requested so far, in order. */
+    qsRequests: [] as string[],
+    /** Server-side redirects: loading `from` lands the tab on `to`. */
+    redirects: new Map<string, string>(),
     loadUrl: vi.fn((url: string) => {
-        cef.currentUrl = url;
+        cef.currentUrl = cef.redirects.get(url) ?? url;
     }),
     executeInTab: vi.fn(),
     fetchNoCors: vi.fn(),
@@ -56,6 +101,9 @@ export const cef = {
     reset() {
         cef.currentUrl = '';
         cef.blackhole.clear();
+        cef.offline.clear();
+        cef.redirects.clear();
+        cef.qsRequests.length = 0;
         cef.loadUrl.mockClear();
         cef.executeInTab.mockClear();
         cef.fetchNoCors.mockClear();
@@ -65,13 +113,14 @@ export const cef = {
 
 const pageFor = (url: string): string | undefined => {
     if (cef.blackhole.has(url)) return undefined;
-    let path: string;
+    let key: string;
     try {
-        path = new URL(url).pathname.replace(/\/$/, '');
+        const u = new URL(url);
+        key = u.hostname + u.pathname.replace(/\/$/, '');
     } catch {
         return undefined;
     }
-    return pages[path]?.();
+    return pages[key]?.();
 };
 
 // CEF reports tab URLs percent-encoded (apostrophes included) — mirror utils.ts.
@@ -80,14 +129,40 @@ const cefEncode = (url: string) => {
     return (alreadyEncoded ? url : encodeURI(url)).replace(/'/g, '%27');
 };
 
+const QS_URL =
+    /^https:\/\/cdn\.staticneo\.com\/neoassets\/data\/qs\/[^/]+\/([^/]+)\.json$/;
+
 cef.fetchNoCors.mockImplementation((url: string) => {
-    if (!url.startsWith('http://localhost:8080/json')) {
-        return Promise.resolve({ ok: false });
+    if (url.startsWith('http://localhost:8080/json')) {
+        const tabs = cef.currentUrl
+            ? [
+                  {
+                      id: 'deckfaqs-view',
+                      url: cefEncode(cef.currentUrl),
+                      title: 'DeckFAQs tab',
+                  },
+              ]
+            : [];
+        return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: () => Promise.resolve(tabs),
+        });
     }
-    const tabs = cef.currentUrl
-        ? [{ url: cefEncode(cef.currentUrl), title: 'DeckFAQs tab' }]
-        : [];
-    return Promise.resolve({ ok: true, json: () => Promise.resolve(tabs) });
+    const qs = QS_URL.exec(url);
+    if (qs) {
+        const kw = decodeURIComponent(qs[1] ?? '');
+        cef.qsRequests.push(kw);
+        if (cef.offline.has('cdn.staticneo.com')) {
+            return Promise.reject(new Error('offline'));
+        }
+        return Promise.resolve({
+            ok: true,
+            status: 200,
+            text: () => Promise.resolve(qsFor(kw)),
+        });
+    }
+    return Promise.resolve({ ok: false, status: 404 });
 });
 
 cef.executeInTab.mockImplementation(
@@ -142,18 +217,23 @@ export const deckyApi = {
 
 // ---------------------------------------------------------------------------
 // @decky/ui stubs (global DFL). Minimal DOM equivalents that keep the props the
-// plugin relies on (onClick/onChange/children/ref/className/style).
+// plugin relies on (DOM event handlers/children/ref/className/style; the
+// gamepad-only props such as onOKButton are dropped, as they have no DOM
+// equivalent).
 // ---------------------------------------------------------------------------
+const DOM_HANDLER = /^on(Click|Pointer|Wheel|Scroll|Key|Touch|Mouse)/;
 const passthrough =
     (tag: 'div' | 'span' | 'button') =>
-    ({ children, className, style, onClick, ref }: Props) =>
+    ({ children, className, style, ref, ...rest }: Props) =>
         React.createElement(
             tag,
             {
                 className: className as string | undefined,
                 style: style as React.CSSProperties | undefined,
-                onClick: onClick as React.MouseEventHandler | undefined,
                 ref: ref as React.Ref<HTMLElement> | undefined,
+                ...Object.fromEntries(
+                    Object.entries(rest).filter(([k]) => DOM_HANDLER.test(k))
+                ),
             },
             children
         );
@@ -174,12 +254,18 @@ type Option = { data?: unknown; label?: React.ReactNode; options?: Option[] };
 const flattenOptions = (opts: Option[]): Option[] =>
     opts.flatMap((o) => (o.options ? flattenOptions(o.options) : [o]));
 
-const Dropdown = ({ rgOptions, selectedOption, onChange }: Props) => {
+const Dropdown = ({
+    rgOptions,
+    selectedOption,
+    onChange,
+    menuLabel,
+    strDefaultLabel,
+}: Props) => {
     const flat = flattenOptions((rgOptions as Option[]) ?? []);
     return React.createElement(
         'select',
         {
-            'aria-label': 'TOC',
+            'aria-label': (menuLabel ?? strDefaultLabel ?? 'TOC') as string,
             value: (selectedOption as string | undefined) ?? '',
             onChange: (e: React.ChangeEvent<HTMLSelectElement>) => {
                 const picked = flat.find(
@@ -200,6 +286,29 @@ const Dropdown = ({ rgOptions, selectedOption, onChange }: Props) => {
         ]
     );
 };
+
+/** DropdownItem = a labelled Dropdown; label doubles as the accessible name. */
+const DropdownItem = ({ rgOptions, selectedOption, onChange, label }: Props) =>
+    React.createElement(
+        'select',
+        {
+            'aria-label': label as string,
+            value: (selectedOption as string | undefined) ?? '',
+            onChange: (e: React.ChangeEvent<HTMLSelectElement>) => {
+                const picked = ((rgOptions as Option[]) ?? []).find(
+                    (o) => String(o.data) === e.target.value
+                );
+                if (picked) (onChange as Fn)(picked);
+            },
+        },
+        ((rgOptions as Option[]) ?? []).map((o) =>
+            React.createElement(
+                'option',
+                { key: String(o.data), value: String(o.data) },
+                o.label
+            )
+        )
+    );
 
 const ToggleField = ({ label, checked, onChange }: Props) =>
     React.createElement(
@@ -265,7 +374,7 @@ const Router = {
     },
 };
 
-const Navigation = {
+export const Navigation = {
     Navigate: vi.fn(),
     NavigateBack: vi.fn(),
     CloseSideMenus: vi.fn(),
@@ -283,6 +392,7 @@ const DFL = {
     DialogBody: passthrough('div'),
     DialogFooter: passthrough('div'),
     Dropdown,
+    DropdownItem,
     ToggleField,
     TextField,
     showModal,
@@ -290,6 +400,19 @@ const DFL = {
     Router,
     Navigation,
     QuickAccessTab: { Decky: 999 },
+    // Same values as @decky/ui's enum (the lightbox maps buttons at load time).
+    GamepadButton: {
+        OK: 1,
+        CANCEL: 2,
+        BUMPER_LEFT: 5,
+        BUMPER_RIGHT: 6,
+        TRIGGER_LEFT: 7,
+        TRIGGER_RIGHT: 8,
+        DIR_UP: 9,
+        DIR_DOWN: 10,
+        DIR_LEFT: 11,
+        DIR_RIGHT: 12,
+    },
     staticClasses: { Title: 'Title' },
 };
 
@@ -372,6 +495,9 @@ const installEnvironment = () => {
     g.appStore = appStore;
     g.__DECKY_SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED_deckyLoaderAPIInit =
         { connect: () => deckyApi };
+    // Background prefetch of the next page: keep it out of the way unless a
+    // scenario lowers the delay explicitly.
+    g.__deckfaqsPrefetchDelayMs = 60_000;
     // jsdom gaps used by the plugin.
     if (!Element.prototype.scrollIntoView) {
         Element.prototype.scrollIntoView = () => {};
@@ -387,7 +513,11 @@ const installEnvironment = () => {
     }
 };
 
-/** Loads the built bundle (dist/index.js) and returns its definePlugin result. */
+/**
+ * Loads the built bundle (dist/index.js) and returns its definePlugin result.
+ * Call after `vi.resetModules()` to get a bundle with fresh module state
+ * (page cache, positions cache).
+ */
 export const loadPlugin = async () => {
     installEnvironment();
     // @ts-expect-error -- the built bundle has no type declarations (and may not exist before `pnpm build`).

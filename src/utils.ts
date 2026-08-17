@@ -1,53 +1,32 @@
 import { executeInTab, fetchNoCors } from '@decky/api';
-import DOMPurify from 'dompurify';
 import type { Dispatch } from 'react';
-import type { SearchResult } from './components/List/GameList';
-import type { ListItem } from './components/List/List';
-import { GAMEFAQS_ORIGIN } from './constants';
+import { BLANK_PAGE } from './constants';
 import type { BrowserView, TableOfContentEntry } from './context/AppContext';
 import { ActionType, type AppActions } from './reducers/AppReducer';
-
-export const getGuideCode = `function parseList(list) {
-    let newT = [];
-    for (let element of list.children) {
-        const tagName = element.tagName;
-        switch (tagName) {
-            case 'LI':
-                const a = element.getElementsByTagName('a')[0];
-                if (a)
-                    newT.push({
-                        data: a.getAttribute('href'),
-                        label: a.textContent,
-                    });
-                break;
-            case 'OL':
-                let label = element.previousSibling?.textContent;
-                let res = parseList(element);
-                newT.push({ label, options: res });
-                break;
-        }
-    }
-
-    return newT;
-}
-
-function get_guide() {
-    let faq = document.getElementById('faqwrap');
-    let tocObjc = [];
-    if (faq) {
-        let toc = faq.getElementsByClassName('ftoc');
-        if (toc.length > 0) {
-            let mainList = toc[0].getElementsByTagName('ol');
-            if (mainList.length > 0) {
-                tocObjc = parseList(mainList[0]);
-            }
-        }
-        return JSON.stringify({ guide: faq.outerHTML, toc: tocObjc });
-    }
-    return undefined;
-}
-get_guide();
-`;
+import { sanitizeGuideHtml } from './sanitize';
+import {
+    gamefaqsSearchUrl,
+    getGamesCode,
+    getGuideCode,
+    parseSearchResults,
+} from './sources/gamefaqs';
+import {
+    isNeoImageUrl,
+    neoGameSearch,
+    neoGuideCode,
+    neoImagePage,
+} from './sources/neoseeker';
+import {
+    badPayloadError,
+    isAllowedScrapeUrl,
+    notFoundError,
+    SOURCE_LABEL,
+    sourceOf,
+    unreachableError,
+    type GuideSource,
+    type Source,
+} from './sources/source';
+import type { ListItem } from './components/List/List';
 
 async function delay(ms: number, state = null) {
     return new Promise((resolve, _reject) => {
@@ -57,24 +36,17 @@ async function delay(ms: number, state = null) {
 
 const MAX_POLLING = 100;
 const CEF_TABS_URL = 'http://localhost:8080/json';
-const BLANK_PAGE = 'data:text/html,<body><%2Fbody>';
 
 export const ERROR_NO_BROWSER_VIEW =
     "Steam's browser view is unavailable. Restart Steam and try again.";
+// Fallback for rejections that are not Errors; site-specific messages come from sources/source.ts.
 const ERROR_UNREACHABLE =
-    "Couldn't load GameFAQs. Check the connection and retry.";
-export const ERROR_BAD_PAYLOAD =
-    'GameFAQs returned something unexpected. Retry, or update DeckFAQs if it keeps happening.';
+    "Couldn't load the guide. Check the connection and retry.";
 
-type CefTab = { url: string; title: string };
+type CefTab = { id?: string; url: string; title: string };
 
-export const isGameFaqsUrl = (url: string): boolean => {
-    try {
-        return new URL(url).origin === GAMEFAQS_ORIGIN;
-    } catch {
-        return false;
-    }
-};
+/** True for the URL the hidden view is parked on between loads. */
+const isParkedUrl = (url: string): boolean => url.startsWith('data:text/html');
 
 // CEF reports the loaded URL percent-encoded (including apostrophes);
 // don't re-encode URLs that already contain escapes.
@@ -184,16 +156,31 @@ const doScrape = async (
 ): Promise<string> => {
     if (cancelled()) return '';
     if (!browserView) throw new Error(ERROR_NO_BROWSER_VIEW);
-    // The BrowserView shares Steam's CEF profile: only ever point it at GameFAQs.
-    if (!isGameFaqsUrl(url)) {
+    // The BrowserView shares Steam's CEF profile: only ever point it at the guide sites.
+    if (!isAllowedScrapeUrl(url)) {
         throw new Error(`Refusing to load off-origin URL ${url}`);
     }
     const tabUrl = toCefTabUrl(url);
+    // Our view is the (single) tab parked on the blank page. Remembering its
+    // id lets a same-site redirect (wiki title renamed, apostrophes dropped)
+    // still be found once the exact URL match fails.
+    const parked = (await getDebuggerTabs()).filter((t) => isParkedUrl(t.url));
+    const ownId = parked.length === 1 ? parked[0]?.id : undefined;
     let result = '';
     browserView.LoadURL(url);
     try {
         for (let i = 0; i < MAX_POLLING && !cancelled(); i++) {
-            const tab = (await getDebuggerTabs()).find((t) => t.url === tabUrl);
+            const tabs = await getDebuggerTabs();
+            const tab =
+                tabs.find((t) => t.url === tabUrl) ??
+                (ownId
+                    ? tabs.find(
+                          (t) =>
+                              t.id === ownId &&
+                              !isParkedUrl(t.url) &&
+                              isAllowedScrapeUrl(t.url)
+                      )
+                    : undefined);
             if (tab?.title) result = await runInTab(tab.title, code);
             if (result) break;
             await delay(100);
@@ -203,16 +190,99 @@ const doScrape = async (
     }
     if (!result && !cancelled()) {
         console.warn(`[DeckFAQs] no content retrieved for ${url}`);
-        throw new Error(ERROR_UNREACHABLE);
+        throw new Error(unreachableError(sourceOf(url)));
     }
     return result;
 };
 
+// ---------------------------------------------------------------------------
+// Guide page cache + prefetch. Loading a page in the hidden view takes
+// seconds (real page, ads and all), so pages already seen are kept in a small
+// LRU and the next page of a walkthrough is fetched ahead while the current
+// one is being read. Keys are the requested URL without its fragment.
+// ---------------------------------------------------------------------------
+
+type CacheEntry = { page: GuidePage; bytes: number; ts: number };
+const CACHE_MAX_ENTRIES = 8;
+const CACHE_MAX_BYTES = 6 * 1024 * 1024;
+const CACHE_TTL_MS = 30 * 60 * 1000;
+const guideCache = new Map<string, CacheEntry>();
+const inflight = new Map<string, Promise<GuidePage>>();
+let cacheBytes = 0;
+/** The one prefetch that may be running (or queued) at a time. */
+let prefetch: { key: string; cancelled: boolean } | undefined;
+
+/** Cache identity of a page load: the URL minus its fragment. */
+const cacheKey = (url: string): string => {
+    try {
+        const u = new URL(url);
+        u.hash = '';
+        return u.href;
+    } catch {
+        return url;
+    }
+};
+
+/** Forget every cached page (Reload, tests). */
+export const resetGuideCache = (): void => {
+    guideCache.clear();
+    cacheBytes = 0;
+};
+
+const cacheGet = (key: string): GuidePage | undefined => {
+    const entry = guideCache.get(key);
+    if (!entry) return undefined;
+    guideCache.delete(key);
+    if (Date.now() - entry.ts > CACHE_TTL_MS) {
+        cacheBytes -= entry.bytes;
+        return undefined;
+    }
+    guideCache.set(key, entry); // most recently used last
+    return entry.page;
+};
+
+const cacheSet = (key: string, page: GuidePage): void => {
+    const bytes = page.html.length;
+    if (bytes > CACHE_MAX_BYTES) return;
+    const old = guideCache.get(key);
+    if (old) {
+        guideCache.delete(key);
+        cacheBytes -= old.bytes;
+    }
+    guideCache.set(key, { page, bytes, ts: Date.now() });
+    cacheBytes += bytes;
+    while (
+        guideCache.size > CACHE_MAX_ENTRIES ||
+        cacheBytes > CACHE_MAX_BYTES
+    ) {
+        const oldest = guideCache.entries().next().value;
+        if (!oldest) break;
+        guideCache.delete(oldest[0]);
+        cacheBytes -= oldest[1].bytes;
+    }
+};
+
+/** Stop the running/queued prefetch (it releases the view at its next poll). */
+export const cancelPrefetch = (): void => {
+    if (prefetch) prefetch.cancelled = true;
+    prefetch = undefined;
+};
+
+/** Delay before a shown page's next page is prefetched (overridable for tests). */
+export const prefetchDelayMs = (): number =>
+    (globalThis as { __deckfaqsPrefetchDelayMs?: number })
+        .__deckfaqsPrefetchDelayMs ?? 1500;
+
 const scrapeUrl = (
     url: string,
     ctx: RequestContext,
-    code: string
+    code: string,
+    isPrefetch = false
 ): Promise<string> => {
+    // A user's load reclaims the view from a prefetch of another page.
+    if (!isPrefetch && prefetch && prefetch.key !== cacheKey(url)) {
+        cancelPrefetch();
+    }
     const run = scrapeQueue.then(() => doScrape(url, ctx, code));
     scrapeQueue = run.catch(() => undefined);
     return run;
@@ -227,139 +297,166 @@ export const getContent = (
 
 export type GuidePage = { html: string; toc: TableOfContentEntry[] };
 
-/** Sanitised guide HTML plus its table of contents. */
-export const getGuideHtml = async (
+// Loads and sanitises one page; '' html when the request was cancelled.
+const loadGuidePage = async (
     url: string,
-    ctx: RequestContext
+    ctx: RequestContext,
+    isPrefetch = false
 ): Promise<GuidePage> => {
-    const raw = await scrapeUrl(url, ctx, getGuideCode);
+    const code = sourceOf(url) === 'neoseeker' ? neoGuideCode : getGuideCode;
+    const raw = await scrapeUrl(url, ctx, code, isPrefetch);
     if (!raw) return { html: '', toc: [] };
+    let body: { guide?: string; toc?: unknown; notFound?: boolean };
     try {
-        const body = JSON.parse(raw) as { guide?: string; toc?: unknown };
-        return {
-            html: DOMPurify.sanitize(body.guide ?? ''),
-            toc: Array.isArray(body.toc)
-                ? (body.toc as TableOfContentEntry[])
-                : [],
-        };
+        body = JSON.parse(raw) as typeof body;
     } catch (e) {
         console.error('[DeckFAQs] failed to parse guide payload', e);
-        throw new Error(ERROR_BAD_PAYLOAD, { cause: e });
+        throw new Error(badPayloadError(sourceOf(url)), { cause: e });
     }
+    if (body.notFound) throw new Error(notFoundError(sourceOf(url)));
+    return {
+        html: sanitizeGuideHtml(body.guide ?? ''),
+        toc: Array.isArray(body.toc) ? (body.toc as TableOfContentEntry[]) : [],
+    };
 };
 
-// Only report the page once it actually holds the JSON search payload;
-// anything else (still loading, Cloudflare interstitial, ...) keeps
-// the caller polling until MAX_POLLING is reached.
-export const getGamesCode = `function get_games() {
-    const text = document.body?.textContent ?? '';
-    try {
-        JSON.parse(text);
-        return text;
-    } catch (e) {
-        return '';
-    }
-}
-get_games()`;
-
-/** Turns the raw GameFAQs search payload into list items. */
-export const parseSearchResults = (raw: string): ListItem[] => {
-    let results: unknown;
-    try {
-        results = raw ? JSON.parse(raw) : [];
-    } catch (e) {
-        console.error('[DeckFAQs] unexpected search response', e);
-        throw new Error(ERROR_BAD_PAYLOAD, { cause: e });
-    }
-    if (!Array.isArray(results)) return [];
-    return (results as SearchResult[]).flatMap((r) =>
-        r.product_name && r.url
-            ? [{ text: `${r.product_name}`, url: `${GAMEFAQS_ORIGIN}${r.url}` }]
-            : []
-    );
-};
-
-// Runs in the game's /faqs page. Returns undefined while the guide lists have
-// not rendered yet (keeps polling), '[]' for games without guides, else a JSON
-// array of {href, title, version, date} for every guide entry.
-export const getGuidesCode = `function get_guides() {
-    const lists = document.querySelectorAll('ol.guides');
-    if (lists.length === 0) {
-        const text = document.body?.textContent ?? '';
-        return text.includes('Want to Write Your Own Guide?') ? '[]' : undefined;
-    }
-    const out = [];
-    for (const li of document.querySelectorAll('ol.guides li')) {
-        const a = li.querySelector('a[href*="/faqs/"]');
-        if (!a) continue;
-        const href = a.getAttribute('href') || '';
-        if (!/\\/faqs\\/\\d+/.test(href)) continue;
-        const meta = li.querySelector('.meta.float_r');
-        const metaText = meta ? (meta.textContent || '').trim() : '';
-        const version = metaText.startsWith('v.') ? metaText.split(',')[0].trim() : '';
-        const dateEl = li.querySelector('.guide_date');
-        const date = dateEl
-            ? dateEl.getAttribute('title') || (dateEl.textContent || '').trim()
-            : '';
-        out.push({ href, title: (a.textContent || '').trim(), version, date });
-    }
-    return JSON.stringify(out);
-}
-get_guides()`;
-
-type GuideEntry = {
-    href: string;
-    title: string;
-    version: string;
-    date: string;
-};
-
-/** Turns the JSON emitted by getGuidesCode into list items. */
-export const parseGuideList = (raw: string): ListItem[] => {
-    let entries: unknown;
-    try {
-        entries = raw ? JSON.parse(raw) : [];
-    } catch (e) {
-        console.error('[DeckFAQs] unexpected guide list payload', e);
-        throw new Error(ERROR_BAD_PAYLOAD, { cause: e });
-    }
-    if (!Array.isArray(entries)) return [];
-    return (entries as Partial<GuideEntry>[]).flatMap((entry) => {
-        if (!entry?.href || !entry.title) return [];
-        let url: string;
-        try {
-            url = new URL(entry.href, GAMEFAQS_ORIGIN).href;
-        } catch {
-            return [];
+/**
+ * Sanitised guide HTML plus its table of contents — from the cache, a
+ * running prefetch of the same page, or a fresh load. `fresh` (Reload) drops
+ * the whole cache first. Cancelled loads resolve to an empty page, which is
+ * never cached.
+ */
+export const getGuideHtml = async (
+    url: string,
+    ctx: RequestContext,
+    { fresh = false }: { fresh?: boolean } = {}
+): Promise<GuidePage> => {
+    // Map images are plain files: nothing to load in the view.
+    if (isNeoImageUrl(url)) return neoImagePage(url);
+    const key = cacheKey(url);
+    if (fresh) {
+        resetGuideCache();
+    } else {
+        const cached = cacheGet(key);
+        if (cached) return cached;
+        const running = inflight.get(key);
+        if (running) {
+            const joined = await running;
+            // An empty result means that prefetch was cancelled: load for real.
+            if (joined.html) return joined;
         }
-        const text = [entry.title, entry.version, entry.date]
-            .filter(Boolean)
-            .join(' - ');
-        return [{ text, url }];
-    });
+    }
+    const page = await loadGuidePage(url, ctx);
+    if (page.html) cacheSet(key, page);
+    return page;
 };
 
+/**
+ * Loads `url` in the background so a later getGuideHtml is instant. Only one
+ * prefetch runs at a time; a user's load of another page cancels it, and a
+ * page that got cached meanwhile is skipped. Errors are swallowed.
+ */
+export const prefetchGuidePage = (
+    url: string,
+    browserView: BrowserView | undefined
+): void => {
+    if (!browserView || isNeoImageUrl(url) || !isAllowedScrapeUrl(url)) return;
+    const key = cacheKey(url);
+    if (guideCache.has(key) || inflight.has(key)) return;
+    cancelPrefetch();
+    const token = { key, cancelled: false };
+    prefetch = token;
+    const ctx: RequestContext = {
+        browserView,
+        cancelled: () => token.cancelled || guideCache.has(key),
+    };
+    const run = (async () => {
+        try {
+            const page = await loadGuidePage(url, ctx, true);
+            if (page.html) cacheSet(key, page);
+            return page;
+        } catch (e) {
+            console.warn(`[DeckFAQs] prefetch of ${url} failed`, e);
+            return { html: '', toc: [] };
+        } finally {
+            if (prefetch === token) prefetch = undefined;
+            inflight.delete(key);
+        }
+    })();
+    inflight.set(key, run);
+};
+
+export type SearchOutcome = {
+    results: ListItem[];
+    term: string;
+    /** Set when one site failed but the other still returned results. */
+    notice?: string;
+};
+
+// Merges the per-site outcomes: GameFAQs first, then Neoseeker, each under
+// its own group when both were asked. A failed site becomes a notice as long
+// as the other one had results; otherwise the failure is reported as usual.
+const mergeSearchResults = (
+    term: string,
+    source: GuideSource,
+    sides: Array<[Source, PromiseSettledResult<ListItem[]>]>
+): SearchOutcome => {
+    const results: ListItem[] = [];
+    const failures: Error[] = [];
+    for (const [site, settled] of sides) {
+        if (settled.status === 'fulfilled') {
+            for (const item of settled.value) {
+                results.push(
+                    source === 'both'
+                        ? { ...item, group: SOURCE_LABEL[site] }
+                        : item
+                );
+            }
+        } else {
+            console.error(`[DeckFAQs] ${site} search failed`, settled.reason);
+            failures.push(
+                settled.reason instanceof Error
+                    ? settled.reason
+                    : new Error(unreachableError(site))
+            );
+        }
+    }
+    const failure = failures[0];
+    if (failure && results.length === 0) throw failure;
+    return { results, term, notice: failure?.message };
+};
+
+/** Searches the selected site(s) for a game name and shows the results step. */
 export const gameSearch = (
     game: string,
     browserView: BrowserView | undefined,
-    dispatch: Dispatch<AppActions>
+    dispatch: Dispatch<AppActions>,
+    source: GuideSource = 'both'
 ) => {
-    const term = encodeURIComponent(game.trim()).replace(/%20/g, '+');
-    const searchUrl = `${GAMEFAQS_ORIGIN}/ajax/home_game_search?term=${term}`;
+    const searchUrl = gamefaqsSearchUrl(game);
+    const none = (): Promise<ListItem[]> => Promise.resolve([]);
     request(
         { browserView, dispatch },
-        (ctx) => {
+        async (ctx) => {
             dispatch({
                 type: ActionType.UPDATE_PLUGIN_STATE,
                 payload: { pluginState: 'results', isLoading: true },
             });
-            return getContent(searchUrl, ctx, getGamesCode);
+            const [gamefaqs, neoseeker] = await Promise.allSettled([
+                source === 'neoseeker'
+                    ? none()
+                    : getContent(searchUrl, ctx, getGamesCode).then(
+                          parseSearchResults
+                      ),
+                source === 'gamefaqs' ? none() : neoGameSearch(game, ctx),
+            ]);
+            return mergeSearchResults(game, source, [
+                ['gamefaqs', gamefaqs],
+                ['neoseeker', neoseeker],
+            ]);
         },
-        (raw) => {
-            dispatch({
-                type: ActionType.UPDATE_RESULTS,
-                payload: parseSearchResults(raw),
-            });
+        (outcome) => {
+            dispatch({ type: ActionType.UPDATE_RESULTS, payload: outcome });
         }
     );
 };
