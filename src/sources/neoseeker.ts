@@ -323,6 +323,24 @@ export const neoGuideCode = `function get_neo_guide() {
     const SKIP = /^(faqs|cheats|screenshots|boxshots|fanart|reviews|forums|members|news|videos|index\\.php)$/;
     const strip = (root) => {
         for (const el of Array.from(root.querySelectorAll('script, style, iframe, form, input, button, select, textarea, .mw-editsection, .noprint'))) el.remove();
+        // Ad slots the site injects into the article (they render as blank gaps).
+        for (const el of Array.from(root.querySelectorAll('.section-vu, .jsad, .placeholder-ad, [id^="Mobile_inline"], [id^="div-gpt-ad"], [data-ad-unit-id]'))) el.remove();
+        for (const el of Array.from(root.querySelectorAll('.text-secondary'))) {
+            if (/^-?\\s*Advertisement\\s*-?$/i.test(clean(el.textContent))) el.remove();
+        }
+        // Clips are shown as their poster frame (the viewer never plays media).
+        for (const video of Array.from(root.querySelectorAll('video'))) {
+            const poster = video.getAttribute('poster');
+            if (!poster) {
+                video.remove();
+                continue;
+            }
+            const img = root.ownerDocument.createElement('img');
+            img.setAttribute('src', poster);
+            img.setAttribute('alt', 'Video: ' + (video.getAttribute('data-filename') || ''));
+            img.setAttribute('class', 'neo-video');
+            video.replaceWith(img);
+        }
     };
     // Same-guide page link? (same slug, not a file/special page or a site section)
     const isPageLink = (a, u) => {

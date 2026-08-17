@@ -349,6 +349,27 @@ describe('neoGuideCode (Neoseeker wiki and FAQ pages)', () => {
         expect(toc).toEqual([]);
     });
 
+    it('drops injected ad slots and shows video clips as their poster frame', () => {
+        const { guide } = run('wiki-er-boss.html');
+        const root = dom(guide);
+        expect(root.querySelector('h1')?.textContent).toBe(
+            'Boss: Erdtree Burial Watchdogs'
+        );
+        expect(
+            root.querySelector(
+                '.section-vu, .jsad, .placeholder-ad, [id^="div-gpt-ad"], [data-ad-unit-id]'
+            )
+        ).toBeNull();
+        expect(root.textContent).not.toMatch(/Advertisement/);
+        expect(root.querySelector('video, source')).toBeNull();
+        const posters = [...root.querySelectorAll('img.neo-video')];
+        expect(posters).toHaveLength(6);
+        expect(posters[0]?.getAttribute('src')).toMatch(
+            /^https:\/\/cdn\.staticneo\.com\/.*\.jpg$/
+        );
+        expect(posters[0]?.getAttribute('alt')).toMatch(/^Video: .*\.mp4$/);
+    });
+
     it('normalises http links and skips red links in the sidebar TOC', () => {
         const raw = runInPage(
             neoGuideCode,

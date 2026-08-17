@@ -853,6 +853,15 @@ export const Guide = ({ fullscreen }: GuideProps) => {
                         padding: 6px;
                         margin: 10px 0;
                       }
+                      .ffaq.neo-wiki .section-header { font-weight: bold; margin-bottom: 4px; }
+                      .ffaq.neo-wiki #toc {
+                        display: inline-block;
+                        border: 1px solid #aaa;
+                        padding: 6px 10px;
+                        margin: 8px 0;
+                      }
+                      .ffaq.neo-wiki #toc ul { margin: 0; padding-left: 18px; }
+                      .ffaq.neo-wiki .neo-video { max-width: 100%; height: auto; }
                       .ffaq.neo-wiki table.wikitable,
                       .ffaq.neo-wiki table.table-list {
                         width: 100%;
