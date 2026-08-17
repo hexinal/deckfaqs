@@ -14,6 +14,7 @@ Built with [Decky Loader](https://github.com/SteamDeckHomebrew/decky-loader).
 
 - Migrated from the legacy `decky-frontend-lib` / `ServerAPI` stack to `@decky/api` + `@decky/ui` (`api_version` 1, ESM bundle). Requires **Decky Loader v3 or newer**.
 - Fixes for current Steam clients (guide view crash, cramped guide layout in the Quick Access Menu, search robustness).
+- Adds support for Neoseeker guides/walkthrough and other QOL improvements.
 - Not (yet) published on the Decky store — install from the releases of this repository, see below.
 
 ## How to Install
