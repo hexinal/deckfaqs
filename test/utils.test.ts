@@ -5,9 +5,12 @@ import type { BrowserView } from '../src/context/AppContext';
 import {
     ERROR_NO_BROWSER_VIEW,
     cancelPendingRequests,
+    cancelPrefetch,
     gameSearch,
     getGuideHtml,
+    prefetchGuidePage,
     request,
+    resetGuideCache,
     retryLastRequest,
     toCefTabUrl,
 } from '../src/utils';
@@ -19,6 +22,12 @@ import {
 } from '../src/sources/source';
 
 const ERROR_BAD_PAYLOAD = badPayloadError('gamefaqs');
+
+// Module-level page cache/prefetch state must not leak between tests.
+beforeEach(() => {
+    resetGuideCache();
+    cancelPrefetch();
+});
 
 describe('isAllowedScrapeUrl', () => {
     it('accepts only the guide sites', () => {
@@ -592,5 +601,119 @@ describe('doScrape tab matching', () => {
         } finally {
             vi.useRealTimers();
         }
+    });
+});
+
+describe('guide page cache and prefetch', () => {
+    const guide = (label: string) =>
+        JSON.stringify({ guide: `<div id="faqwrap">${label}</div>`, toc: [] });
+    let current = 'data:text/html,<body><%2Fbody>';
+    let tabsVisible = true;
+    const loadUrl = vi.fn((url: string) => {
+        current = url;
+    });
+    const browserView = { LoadURL: loadUrl } as unknown as BrowserView;
+    const ctx = { browserView, cancelled: () => false };
+    const wiki = (name: string) =>
+        `https://www.neoseeker.com/dragon-quest-xi/${name}`;
+    const loads = () =>
+        loadUrl.mock.calls
+            .map((c) => c[0])
+            .filter(
+                (u): u is string =>
+                    typeof u === 'string' && !u.startsWith('data:')
+            );
+
+    beforeEach(async () => {
+        const { fetchNoCors, executeInTab } = await import('@decky/api');
+        resetGuideCache();
+        cancelPrefetch();
+        current = 'data:text/html,<body><%2Fbody>';
+        tabsVisible = true;
+        loadUrl.mockClear();
+        vi.mocked(fetchNoCors).mockReset();
+        vi.mocked(fetchNoCors).mockImplementation((url: string) => {
+            if (!url.startsWith('http://localhost:8080/json')) {
+                return Promise.resolve({ ok: false, status: 404 } as Response);
+            }
+            const tabs = tabsVisible
+                ? [{ id: 'ours', url: current, title: 'tab' }]
+                : [];
+            return Promise.resolve({
+                ok: true,
+                json: () => Promise.resolve(tabs),
+            } as Response);
+        });
+        vi.mocked(executeInTab).mockReset();
+        vi.mocked(executeInTab).mockImplementation(() =>
+            Promise.resolve({ success: true, result: guide(current) })
+        );
+    });
+
+    it('serves a page seen before from the cache, ignoring the fragment', async () => {
+        const first = await getGuideHtml(wiki('Erik#Sect'), ctx);
+        const again = await getGuideHtml(wiki('Erik'), ctx);
+        expect(again).toBe(first);
+        expect(loads()).toEqual([wiki('Erik#Sect')]);
+    });
+
+    it('bypasses and drops the cache on a fresh load', async () => {
+        await getGuideHtml(wiki('Erik'), ctx);
+        await getGuideHtml(wiki('Erik'), ctx, { fresh: true });
+        expect(loads()).toEqual([wiki('Erik'), wiki('Erik')]);
+    });
+
+    it('never caches a cancelled (empty) load', async () => {
+        await getGuideHtml(wiki('Erik'), {
+            browserView,
+            cancelled: () => true,
+        });
+        await getGuideHtml(wiki('Erik'), ctx);
+        expect(loads()).toEqual([wiki('Erik')]);
+    });
+
+    it('lets a load join the prefetch of the same page', async () => {
+        prefetchGuidePage(wiki('Next'), browserView);
+        const page = await getGuideHtml(wiki('Next'), ctx);
+        expect(page.html).toContain(wiki('Next'));
+        expect(loads()).toEqual([wiki('Next')]);
+        // ...and the prefetched page stays cached for later.
+        await getGuideHtml(wiki('Next'), ctx);
+        expect(loads()).toEqual([wiki('Next')]);
+    });
+
+    it('cancels a running prefetch when the user loads another page', async () => {
+        vi.useFakeTimers();
+        try {
+            tabsVisible = false; // the prefetched page never shows up
+            prefetchGuidePage(wiki('Slow'), browserView);
+            await vi.advanceTimersByTimeAsync(350);
+            const user = getGuideHtml(wiki('Wanted'), ctx);
+            // The prefetch notices at its next poll and parks the view; then
+            // the user's page loads.
+            tabsVisible = true;
+            await vi.advanceTimersByTimeAsync(500);
+            const page = await user;
+            expect(page.html).toContain(wiki('Wanted'));
+            expect(loads()).toEqual([wiki('Slow'), wiki('Wanted')]);
+            // The cancelled prefetch left nothing behind: loading it later fetches.
+            await getGuideHtml(wiki('Slow'), ctx);
+            expect(loads()).toEqual([
+                wiki('Slow'),
+                wiki('Wanted'),
+                wiki('Slow'),
+            ]);
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    it('evicts the oldest pages beyond the size limits', async () => {
+        for (let i = 0; i < 9; i++) await getGuideHtml(wiki(`P${i}`), ctx);
+        expect(loads()).toHaveLength(9);
+        await getGuideHtml(wiki('P0'), ctx); // evicted (9 > 8 entries)
+        expect(loads()).toHaveLength(10);
+        await getGuideHtml(wiki('P8'), ctx); // still cached
+        expect(loads()).toHaveLength(10);
     });
 });

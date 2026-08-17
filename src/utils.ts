@@ -195,11 +195,94 @@ const doScrape = async (
     return result;
 };
 
+// ---------------------------------------------------------------------------
+// Guide page cache + prefetch. Loading a page in the hidden view takes
+// seconds (real page, ads and all), so pages already seen are kept in a small
+// LRU and the next page of a walkthrough is fetched ahead while the current
+// one is being read. Keys are the requested URL without its fragment.
+// ---------------------------------------------------------------------------
+
+type CacheEntry = { page: GuidePage; bytes: number; ts: number };
+const CACHE_MAX_ENTRIES = 8;
+const CACHE_MAX_BYTES = 6 * 1024 * 1024;
+const CACHE_TTL_MS = 30 * 60 * 1000;
+const guideCache = new Map<string, CacheEntry>();
+const inflight = new Map<string, Promise<GuidePage>>();
+let cacheBytes = 0;
+/** The one prefetch that may be running (or queued) at a time. */
+let prefetch: { key: string; cancelled: boolean } | undefined;
+
+/** Cache identity of a page load: the URL minus its fragment. */
+const cacheKey = (url: string): string => {
+    try {
+        const u = new URL(url);
+        u.hash = '';
+        return u.href;
+    } catch {
+        return url;
+    }
+};
+
+/** Forget every cached page (Reload, tests). */
+export const resetGuideCache = (): void => {
+    guideCache.clear();
+    cacheBytes = 0;
+};
+
+const cacheGet = (key: string): GuidePage | undefined => {
+    const entry = guideCache.get(key);
+    if (!entry) return undefined;
+    guideCache.delete(key);
+    if (Date.now() - entry.ts > CACHE_TTL_MS) {
+        cacheBytes -= entry.bytes;
+        return undefined;
+    }
+    guideCache.set(key, entry); // most recently used last
+    return entry.page;
+};
+
+const cacheSet = (key: string, page: GuidePage): void => {
+    const bytes = page.html.length;
+    if (bytes > CACHE_MAX_BYTES) return;
+    const old = guideCache.get(key);
+    if (old) {
+        guideCache.delete(key);
+        cacheBytes -= old.bytes;
+    }
+    guideCache.set(key, { page, bytes, ts: Date.now() });
+    cacheBytes += bytes;
+    while (
+        guideCache.size > CACHE_MAX_ENTRIES ||
+        cacheBytes > CACHE_MAX_BYTES
+    ) {
+        const oldest = guideCache.entries().next().value;
+        if (!oldest) break;
+        guideCache.delete(oldest[0]);
+        cacheBytes -= oldest[1].bytes;
+    }
+};
+
+/** Stop the running/queued prefetch (it releases the view at its next poll). */
+export const cancelPrefetch = (): void => {
+    if (prefetch) prefetch.cancelled = true;
+    prefetch = undefined;
+};
+
+/** Delay before a shown page's next page is prefetched (overridable for tests). */
+export const prefetchDelayMs = (): number =>
+    (globalThis as { __deckfaqsPrefetchDelayMs?: number })
+        .__deckfaqsPrefetchDelayMs ?? 1500;
+
 const scrapeUrl = (
     url: string,
     ctx: RequestContext,
-    code: string
+    code: string,
+    isPrefetch = false
 ): Promise<string> => {
+    // A user's load reclaims the view from a prefetch of another page.
+    if (!isPrefetch && prefetch && prefetch.key !== cacheKey(url)) {
+        cancelPrefetch();
+    }
     const run = scrapeQueue.then(() => doScrape(url, ctx, code));
     scrapeQueue = run.catch(() => undefined);
     return run;
@@ -214,15 +297,14 @@ export const getContent = (
 
 export type GuidePage = { html: string; toc: TableOfContentEntry[] };
 
-/** Sanitised guide HTML plus its table of contents. */
-export const getGuideHtml = async (
+// Loads and sanitises one page; '' html when the request was cancelled.
+const loadGuidePage = async (
     url: string,
-    ctx: RequestContext
+    ctx: RequestContext,
+    isPrefetch = false
 ): Promise<GuidePage> => {
-    // Map images are plain files: nothing to load in the view.
-    if (isNeoImageUrl(url)) return neoImagePage(url);
     const code = sourceOf(url) === 'neoseeker' ? neoGuideCode : getGuideCode;
-    const raw = await scrapeUrl(url, ctx, code);
+    const raw = await scrapeUrl(url, ctx, code, isPrefetch);
     if (!raw) return { html: '', toc: [] };
     let body: { guide?: string; toc?: unknown; notFound?: boolean };
     try {
@@ -236,6 +318,72 @@ export const getGuideHtml = async (
         html: sanitizeGuideHtml(body.guide ?? ''),
         toc: Array.isArray(body.toc) ? (body.toc as TableOfContentEntry[]) : [],
     };
+};
+
+/**
+ * Sanitised guide HTML plus its table of contents — from the cache, a
+ * running prefetch of the same page, or a fresh load. `fresh` (Reload) drops
+ * the whole cache first. Cancelled loads resolve to an empty page, which is
+ * never cached.
+ */
+export const getGuideHtml = async (
+    url: string,
+    ctx: RequestContext,
+    { fresh = false }: { fresh?: boolean } = {}
+): Promise<GuidePage> => {
+    // Map images are plain files: nothing to load in the view.
+    if (isNeoImageUrl(url)) return neoImagePage(url);
+    const key = cacheKey(url);
+    if (fresh) {
+        resetGuideCache();
+    } else {
+        const cached = cacheGet(key);
+        if (cached) return cached;
+        const running = inflight.get(key);
+        if (running) {
+            const joined = await running;
+            // An empty result means that prefetch was cancelled: load for real.
+            if (joined.html) return joined;
+        }
+    }
+    const page = await loadGuidePage(url, ctx);
+    if (page.html) cacheSet(key, page);
+    return page;
+};
+
+/**
+ * Loads `url` in the background so a later getGuideHtml is instant. Only one
+ * prefetch runs at a time; a user's load of another page cancels it, and a
+ * page that got cached meanwhile is skipped. Errors are swallowed.
+ */
+export const prefetchGuidePage = (
+    url: string,
+    browserView: BrowserView | undefined
+): void => {
+    if (!browserView || isNeoImageUrl(url) || !isAllowedScrapeUrl(url)) return;
+    const key = cacheKey(url);
+    if (guideCache.has(key) || inflight.has(key)) return;
+    cancelPrefetch();
+    const token = { key, cancelled: false };
+    prefetch = token;
+    const ctx: RequestContext = {
+        browserView,
+        cancelled: () => token.cancelled || guideCache.has(key),
+    };
+    const run = (async () => {
+        try {
+            const page = await loadGuidePage(url, ctx, true);
+            if (page.html) cacheSet(key, page);
+            return page;
+        } catch (e) {
+            console.warn(`[DeckFAQs] prefetch of ${url} failed`, e);
+            return { html: '', toc: [] };
+        } finally {
+            if (prefetch === token) prefetch = undefined;
+            inflight.delete(key);
+        }
+    })();
+    inflight.set(key, run);
 };
 
 export type SearchOutcome = {

@@ -66,7 +66,8 @@ export const Nav = () => {
                         type: ActionType.UPDATE_LOADING,
                         payload: true,
                     });
-                    return getGuideHtml(guideUrl, ctx);
+                    // Reload means "get it again": bypass and drop the page cache.
+                    return getGuideHtml(guideUrl, ctx, { fresh: true });
                 },
                 ({ html, toc }) => {
                     dispatch({

@@ -17,13 +17,16 @@ import {
     type RenderResult,
 } from '@testing-library/react';
 import * as React from 'react';
-import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cef, deckyApi, loadPlugin, routes, steam } from './env';
 
 type Plugin = Awaited<ReturnType<typeof loadPlugin>>;
 let plugin: Plugin;
 
-beforeAll(async () => {
+// A fresh bundle per test: its module-level caches (visited pages, reading
+// positions) must not leak from one scenario into the next.
+beforeEach(async () => {
+    vi.resetModules();
     plugin = await loadPlugin();
 });
 afterEach(() => {
@@ -31,8 +34,9 @@ afterEach(() => {
     document.querySelectorAll('[data-modal]').forEach((el) => el.remove());
     cef.reset();
     // Settings are read on every panel mount: reseed so one test's toggles
-    // cannot leak into the next.
+    // cannot leak into the next; reading positions likewise.
     steam.storage.set('deckfaqs_settings', { darkMode: true });
+    steam.storage.delete('deckfaqs_positions');
 });
 
 const openPanel = () => render(plugin.content);
@@ -372,28 +376,26 @@ describe('DeckFAQs bundle', () => {
             expect(steam.storage.get('deckfaqs_positions')).toMatchObject({
                 [guideUrl]: { page: subPage, ratio: 0.5 },
             });
+            // Reopening lands on the remembered sub-page — from the page cache,
+            // without another load — and restores the position there.
             cef.loadUrl.mockClear();
             clickButton(/^Walkthrough \(PS4\)/);
-            await waitFor(() =>
-                expect(cef.loadUrl).toHaveBeenCalledWith(subPage)
-            );
             await waitFor(() =>
                 expect(document.querySelector('#fixture-links')).not.toBeNull()
             );
             await waitFor(() => expect(scroller().scrollTop).toBe(400));
+            expect(cef.loadUrl).not.toHaveBeenCalled();
             // In-guide link back to the landing page — clicked on an element
-            // nested inside the <a> (links are handled by delegation).
+            // nested inside the <a> (links are handled by delegation); the
+            // landing page was seen before, so it comes from the cache too.
             expect(screen.getByText('« Home')).toBeInTheDocument();
-            cef.loadUrl.mockClear();
             fireEvent.click(screen.getByText('the guide home in bold'));
-            await waitFor(() =>
-                expect(cef.loadUrl).toHaveBeenCalledWith(guideUrl)
-            );
             await waitFor(() =>
                 expect(
                     document.querySelector('#faqwrap h1')?.textContent
                 ).toMatch(/Walkthrough and Guide/)
             );
+            expect(cef.loadUrl).not.toHaveBeenCalled();
         } finally {
             undoLayout();
         }
@@ -446,6 +448,92 @@ describe('DeckFAQs bundle', () => {
             expect(document.querySelector('#fixture-links')).not.toBeNull()
         );
         expect(cef.currentUrl.startsWith('data:text/html')).toBe(true);
+    });
+
+    it('prefetches the next wiki page and serves visited pages from the cache', async () => {
+        const g = globalThis as { __deckfaqsPrefetchDelayMs?: number };
+        g.__deckfaqsPrefetchDelayMs = 50;
+        try {
+            openPanel();
+            await openNeoGuideList();
+            clickButton(/^Walkthrough \(PS4\)/);
+            await waitFor(() =>
+                expect(
+                    document.querySelector('#faqwrap.neo-wiki')
+                ).not.toBeNull()
+            );
+            // The landing page's "Next" is fetched in the background…
+            await waitFor(() =>
+                expect(cef.loadUrl).toHaveBeenCalledWith(
+                    'https://www.neoseeker.com/dragon-quest-xi/Coming_of_Age:_The_Prologue'
+                )
+            );
+            await waitFor(() =>
+                expect(cef.currentUrl.startsWith('data:text/html')).toBe(true)
+            );
+            // …so clicking Next needs no load at all.
+            cef.loadUrl.mockClear();
+            fireEvent.click(screen.getByText(/^Next: Coming of Age/));
+            await waitFor(() =>
+                expect(document.querySelector('#fixture-links')).not.toBeNull()
+            );
+            expect(cef.loadUrl).not.toHaveBeenCalled();
+            // The sub-page's Next is prefetched in turn.
+            await waitFor(() =>
+                expect(cef.loadUrl).toHaveBeenCalledWith(
+                    'https://www.neoseeker.com/dragon-quest-xi/Adventures_with_Erik'
+                )
+            );
+        } finally {
+            g.__deckfaqsPrefetchDelayMs = 60_000;
+        }
+    });
+
+    it('lets a user click reclaim the view from a running prefetch', async () => {
+        const g = globalThis as { __deckfaqsPrefetchDelayMs?: number };
+        g.__deckfaqsPrefetchDelayMs = 50;
+        // The landing's Next never finishes loading (offline page).
+        cef.blackhole.add(
+            'https://www.neoseeker.com/dragon-quest-xi/Coming_of_Age:_The_Prologue'
+        );
+        try {
+            openPanel();
+            await openNeoGuideList();
+            clickButton(/^Walkthrough \(PS4\)/);
+            await waitFor(() =>
+                expect(
+                    document.querySelector('#faqwrap.neo-wiki')
+                ).not.toBeNull()
+            );
+            await waitFor(() =>
+                expect(cef.loadUrl).toHaveBeenCalledWith(
+                    'https://www.neoseeker.com/dragon-quest-xi/Coming_of_Age:_The_Prologue'
+                )
+            );
+            // The user picks another page while the prefetch is polling: the
+            // prefetch is cancelled and the user's page loads.
+            cef.loadUrl.mockClear();
+            fireEvent.change(screen.getByRole('combobox', { name: 'TOC' }), {
+                target: {
+                    value: 'https://www.neoseeker.com/dragon-quest-xi/Fun-Size_Forge',
+                },
+            });
+            await waitFor(() =>
+                expect(cef.loadUrl).toHaveBeenCalledWith(
+                    'https://www.neoseeker.com/dragon-quest-xi/Fun-Size_Forge'
+                )
+            );
+            await waitFor(() =>
+                expect(
+                    document.querySelector('#faqwrap.neo-wiki')
+                ).not.toBeNull()
+            );
+            expect(screen.getByRole('combobox', { name: 'TOC' })).toHaveValue(
+                'https://www.neoseeker.com/dragon-quest-xi/Fun-Size_Forge'
+            );
+        } finally {
+            g.__deckfaqsPrefetchDelayMs = 60_000;
+        }
     });
 
     it('renders Neoseeker HTML and text FAQs and map images', async () => {
@@ -687,16 +775,17 @@ describe('DeckFAQs bundle', () => {
             expect(steam.storage.get('deckfaqs_positions')).toMatchObject({
                 [guideUrl]: { page: '?page=1', ratio: 0.25 },
             });
+            // The remembered page was loaded as `?page=1#section48` and comes
+            // back from the cache (keys ignore the fragment): no load.
             cef.loadUrl.mockClear();
             clickButton(/FFX FAQ\/Walkthrough/);
-            await waitFor(() =>
-                expect(cef.loadUrl).toHaveBeenCalledWith(`${guideUrl}/?page=1`)
-            );
             await waitFor(() =>
                 expect(document.querySelector('#faqwrap')).not.toBeNull()
             );
             await waitFor(() => expect(scroller().scrollTop).toBe(200));
-            // Reload always goes back to the first page and records that.
+            expect(cef.loadUrl).not.toHaveBeenCalled();
+            // Reload always goes back to the first page, bypasses the cache,
+            // and records that.
             const reload = screen
                 .getAllByRole('button')
                 .filter((b) => b.textContent === '')[1]!;

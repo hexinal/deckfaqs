@@ -5,7 +5,7 @@ import {
     QuickAccessTab,
     Router,
 } from '@decky/ui';
-import { routerHook } from '@decky/api';
+import { routerHook, useQuickAccessVisible } from '@decky/api';
 import {
     useCallback,
     useContext,
@@ -18,9 +18,15 @@ import {
     AppContext,
     AppContextProvider,
     type GuideContents,
+    type TableOfContentEntry,
 } from '../../context/AppContext';
 import { ActionType } from '../../reducers/AppReducer';
-import { getGuideHtml, request } from '../../utils';
+import {
+    getGuideHtml,
+    prefetchDelayMs,
+    prefetchGuidePage,
+    request,
+} from '../../utils';
 import {
     imageOrigins,
     pageOf,
@@ -397,6 +403,31 @@ export const Guide = ({ fullscreen }: GuideProps) => {
             }
         };
     }, [guideUrl, page, isLoading, error, getScrollElement, getAnchorTops]);
+
+    // Prefetch the next page of a multi-page guide once this one has been on
+    // screen for a moment (Neoseeker's prev/next links; GameFAQs' ?page=N+1
+    // when the TOC references it), so a Next click is instant.
+    const qamVisible = useQuickAccessVisible();
+    useEffect(() => {
+        if (!guideHtml || isLoading || error || !(fullscreen || qamVisible))
+            return;
+        const timer = setTimeout(() => {
+            const guide = stateRef.current.currentGuide;
+            const url = guide?.guideUrl;
+            if (!url) return;
+            const next = nextPageOf(hostRef.current, guide);
+            if (next) prefetchGuidePage(pageUrl(url, next), browserView);
+        }, prefetchDelayMs());
+        return () => clearTimeout(timer);
+    }, [
+        guideHtml,
+        page,
+        isLoading,
+        error,
+        fullscreen,
+        qamVisible,
+        browserView,
+    ]);
 
     // Restore a saved position: `restore` is set when the guide is opened
     // from the list (or handed back from fullscreen); on first mount fall back
@@ -902,6 +933,30 @@ export const Guide = ({ fullscreen }: GuideProps) => {
             ),
         [setHost, onGuideClick, isLoading, error, fullscreen, state.darkMode]
     );
+};
+
+/** The next page of a guide in `GuideContents.page` form, if it has one. */
+const nextPageOf = (
+    host: HTMLElement | null,
+    guide: GuideContents
+): string | undefined => {
+    const url = guide.guideUrl ?? '';
+    if (sourceOf(url) === 'neoseeker') {
+        const next = host?.querySelector('.neo-nav a.neo-next');
+        const href = next?.getAttribute('href');
+        return href ? pageOf(url, href).page || undefined : undefined;
+    }
+    // GameFAQs: pages are ?page=N under the guide; '' is page 1.
+    const match = /^\?page=(\d+)/.exec(guide.page ?? '');
+    const following = `?page=${(match ? Number(match[1]) : 1) + 1}`;
+    const references = (entries: readonly TableOfContentEntry[]): boolean =>
+        entries.some((entry) =>
+            entry.options
+                ? references(entry.options)
+                : typeof entry.data === 'string' &&
+                  entry.data.startsWith(following)
+        );
+    return references(guide.guideToc ?? []) ? following : undefined;
 };
 
 const navButtonStyle = {

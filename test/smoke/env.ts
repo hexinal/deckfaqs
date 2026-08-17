@@ -49,6 +49,11 @@ const pages: Record<string, () => string> = {
     // Redirect target used by the redirect smoke scenario.
     'www.neoseeker.com/dragon-quest-xi/Coming_of_Age': () =>
         fixture('neoseeker/wiki-dqxi-coming-of-age.html'),
+    // Next pages reached by the prefetch scenarios.
+    'www.neoseeker.com/dragon-quest-xi/Adventures_with_Erik': () =>
+        fixture('neoseeker/wiki-dqxi-coming-of-age.html'),
+    'www.neoseeker.com/dragon-quest-xi/Fun-Size_Forge': () =>
+        fixture('neoseeker/walkthrough-dragon-quest-xi.html'),
     'www.neoseeker.com/dragon-quest-xi/faqs/3043257-bestiary.html': () =>
         fixture('neoseeker/faq-html-dqxi-bestiary.html'),
     'www.neoseeker.com/chrono-trigger/faqs/131223-o.html': () =>
@@ -472,6 +477,9 @@ const installEnvironment = () => {
     g.appStore = appStore;
     g.__DECKY_SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED_deckyLoaderAPIInit =
         { connect: () => deckyApi };
+    // Background prefetch of the next page: keep it out of the way unless a
+    // scenario lowers the delay explicitly.
+    g.__deckfaqsPrefetchDelayMs = 60_000;
     // jsdom gaps used by the plugin.
     if (!Element.prototype.scrollIntoView) {
         Element.prototype.scrollIntoView = () => {};
@@ -487,7 +495,11 @@ const installEnvironment = () => {
     }
 };
 
-/** Loads the built bundle (dist/index.js) and returns its definePlugin result. */
+/**
+ * Loads the built bundle (dist/index.js) and returns its definePlugin result.
+ * Call after `vi.resetModules()` to get a bundle with fresh module state
+ * (page cache, positions cache).
+ */
 export const loadPlugin = async () => {
     installEnvironment();
     // @ts-expect-error -- the built bundle has no type declarations (and may not exist before `pnpm build`).
