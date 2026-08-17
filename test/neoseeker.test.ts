@@ -161,14 +161,24 @@ describe('neoGameSearch', () => {
         vi.mocked(fetchNoCors).mockReset();
     });
 
-    it('stops at the first keyword with hits', async () => {
+    it('requests every keyword at once and takes the first (in order) with hits', async () => {
+        const hit =
+            'qs({"products":[{"name":"Dragon Quest XI","url":"//www.neoseeker.com/dragon-quest-xi/walkthrough"}]});';
+        // The later, broader keyword answers first with unrelated hits: the
+        // earlier candidate still wins.
         vi.mocked(fetchNoCors)
             .mockResolvedValueOnce(response(200, 'qs({"products":[]});'))
             .mockResolvedValueOnce(response(200, 'qs({"products":[]});'))
+            .mockImplementationOnce(
+                () =>
+                    new Promise((resolve) =>
+                        setTimeout(() => resolve(response(200, hit)), 20)
+                    )
+            )
             .mockResolvedValueOnce(
                 response(
                     200,
-                    'qs({"products":[{"name":"Dragon Quest XI","url":"//www.neoseeker.com/dragon-quest-xi/walkthrough"}]});'
+                    'qs({"products":[{"name":"Dragon Quest","url":"//www.neoseeker.com/dragon-quest/"}]});'
                 )
             );
         const items = await neoGameSearch(
@@ -185,6 +195,7 @@ describe('neoGameSearch', () => {
             qsUrl('dragon_quest_xi_s_echoes'),
             qsUrl('dragon_quest_xi_s'),
             qsUrl('dragon_quest_xi'),
+            qsUrl('dragon_quest'),
         ]);
     });
     it('resolves [] when nothing matches (404s count as no hits)', async () => {

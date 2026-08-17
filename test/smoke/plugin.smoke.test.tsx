@@ -170,10 +170,12 @@ describe('DeckFAQs bundle', () => {
         await screen.findByRole('button', {
             name: /^Dragon Quest XI: Echoes of an Elusive Age$/,
         });
+        // All keyword candidates are requested at once; the first with hits wins.
         expect(cef.qsRequests).toEqual([
             'dragon_quest_xi_s_echoes',
             'dragon_quest_xi_s',
             'dragon_quest_xi',
+            'dragon_quest',
         ]);
     });
 

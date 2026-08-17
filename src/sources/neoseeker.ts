@@ -125,8 +125,11 @@ export const neoGameSearch = async (
     game: string,
     ctx: RequestContext
 ): Promise<ListItem[]> => {
-    for (const kw of qsCandidates(game)) {
-        if (ctx.cancelled()) return [];
+    if (ctx.cancelled()) return [];
+    // One tiny CDN file per candidate: request them all at once, then take
+    // the first candidate (in order) that has hits without waiting for the
+    // slower ones behind it.
+    const fetchCandidate = async (kw: string): Promise<ListItem[]> => {
         let response: Response | null;
         try {
             response = await Promise.race([
@@ -137,8 +140,9 @@ export const neoGameSearch = async (
             throw unreachable(e);
         }
         if (!response) throw unreachable('timeout');
-        // Only over-long keys 404 (as HTML); anything else non-OK is an outage.
-        if (response.status === 404) continue;
+        // 404 = the CDN has no file for that key: no hits. Anything else
+        // non-OK is an outage.
+        if (response.status === 404) return [];
         if (!response.ok) throw unreachable(response.status);
         let text: string;
         try {
@@ -146,9 +150,22 @@ export const neoGameSearch = async (
         } catch (e) {
             throw unreachable(e);
         }
-        const items = parseQsPayload(text);
-        if (items.length > 0) return items;
+        return parseQsPayload(text);
+    };
+    const attempts = qsCandidates(game).map((kw) => fetchCandidate(kw));
+    // Nobody may reject unhandled while we are still waiting on an earlier one.
+    for (const attempt of attempts) attempt.catch(() => undefined);
+    let failure: Error | undefined;
+    for (const attempt of attempts) {
+        try {
+            const items = await attempt;
+            if (items.length > 0) return items;
+        } catch (e) {
+            failure ??= e instanceof Error ? e : unreachable(e);
+        }
+        if (ctx.cancelled()) return [];
     }
+    if (failure) throw failure;
     return [];
 };
 
