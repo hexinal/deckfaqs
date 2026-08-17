@@ -12,6 +12,9 @@ const NEOSEEKER_IMAGE_ORIGINS: readonly string[] = [
     'https://i.neoseeker.com',
 ];
 
+// Where the hidden BrowserView is parked between loads; also how utils.ts recognises its tab.
+const BLANK_PAGE = 'data:text/html,<body><%2Fbody>';
+
 // SteamClient.Storage key for persisted settings ({ darkMode, source }).
 const SETTINGS = 'deckfaqs_settings';
 // SteamClient.Storage key for last reading positions ({ [guideUrl]: GuidePosition }).
@@ -50,6 +53,7 @@ export {
     NEOSEEKER_CDN_ORIGIN,
     SCRAPE_ORIGINS,
     NEOSEEKER_IMAGE_ORIGINS,
+    BLANK_PAGE,
     SETTINGS,
     POSITIONS,
     MAX_POSITIONS,

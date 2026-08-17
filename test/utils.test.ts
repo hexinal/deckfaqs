@@ -483,3 +483,114 @@ describe('gameSearch', () => {
         });
     });
 });
+
+describe('doScrape tab matching', () => {
+    const tabsFor =
+        (
+            current: () => string,
+            extra: Array<{ id: string; url: string }> = []
+        ) =>
+        (url: string) => {
+            if (!url.startsWith('http://localhost:8080/json')) {
+                return Promise.resolve({ ok: false, status: 404 } as Response);
+            }
+            const tabs = [
+                { id: 'ours', url: current(), title: 'tab' },
+                ...extra.map((t) => ({ ...t, title: 'other' })),
+            ];
+            return Promise.resolve({
+                ok: true,
+                json: () => Promise.resolve(tabs),
+            } as Response);
+        };
+    const guidePayload = JSON.stringify({
+        guide: '<div id="faqwrap"></div>',
+        toc: [],
+    });
+
+    it('finds its own tab by id after a same-site redirect', async () => {
+        const { fetchNoCors, executeInTab } = await import('@decky/api');
+        let current = 'data:text/html,<body><%2Fbody>';
+        const loadUrl = vi.fn((url: string) => {
+            // The site redirects the requested title to its canonical form.
+            current = url.startsWith('data:')
+                ? url
+                : 'https://www.neoseeker.com/elden-ring/Bosses/Erdtree_Burial_Watchdogs';
+        });
+        vi.mocked(fetchNoCors).mockImplementation(tabsFor(() => current));
+        vi.mocked(executeInTab).mockResolvedValue({
+            success: true,
+            result: guidePayload,
+        });
+        const page = await getGuideHtml(
+            'https://www.neoseeker.com/elden-ring/Bosses/Erdtree_Burial_Watchdog',
+            {
+                browserView: { LoadURL: loadUrl } as unknown as BrowserView,
+                cancelled: () => false,
+            }
+        );
+        expect(page.html).toBe('<div id="faqwrap"></div>');
+        expect(loadUrl).toHaveBeenLastCalledWith(
+            'data:text/html,<body><%2Fbody>'
+        );
+    });
+
+    it('never adopts a redirect target off the guide sites, nor when its tab is ambiguous', async () => {
+        const { fetchNoCors, executeInTab } = await import('@decky/api');
+        vi.mocked(executeInTab).mockClear();
+        vi.useFakeTimers();
+        try {
+            let current = 'data:text/html,<body><%2Fbody>';
+            const loadUrl = vi.fn((url: string) => {
+                current = url.startsWith('data:')
+                    ? url
+                    : 'https://evil.example/landing';
+            });
+            vi.mocked(fetchNoCors).mockImplementation(tabsFor(() => current));
+            vi.mocked(executeInTab).mockResolvedValue({
+                success: true,
+                result: guidePayload,
+            });
+            const ctx = {
+                browserView: { LoadURL: loadUrl } as unknown as BrowserView,
+                cancelled: () => false,
+            };
+            const offSite = getGuideHtml(
+                'https://www.neoseeker.com/elden-ring/X',
+                ctx
+            );
+            offSite.catch(() => undefined);
+            await vi.advanceTimersByTimeAsync(11_000);
+            await expect(offSite).rejects.toThrow(/Couldn't load Neoseeker/);
+            expect(executeInTab).not.toHaveBeenCalled();
+
+            // Two parked tabs: no id can be trusted, so only the exact match counts.
+            current = 'data:text/html,<body><%2Fbody>';
+            vi.mocked(fetchNoCors).mockImplementation(
+                tabsFor(
+                    () => current,
+                    [{ id: 'theirs', url: 'data:text/html,<body><%2Fbody>' }]
+                )
+            );
+            const ambiguous = getGuideHtml(
+                'https://www.neoseeker.com/elden-ring/Y',
+                {
+                    browserView: {
+                        LoadURL: (url: string) => {
+                            current = url.startsWith('data:')
+                                ? url
+                                : 'https://www.neoseeker.com/elden-ring/Y-canonical';
+                        },
+                    } as unknown as BrowserView,
+                    cancelled: () => false,
+                }
+            );
+            ambiguous.catch(() => undefined);
+            await vi.advanceTimersByTimeAsync(11_000);
+            await expect(ambiguous).rejects.toThrow(/Couldn't load Neoseeker/);
+            expect(executeInTab).not.toHaveBeenCalled();
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+});

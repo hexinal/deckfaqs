@@ -46,6 +46,9 @@ const pages: Record<string, () => string> = {
         fixture('neoseeker/walkthrough-dragon-quest-xi.html'),
     'www.neoseeker.com/dragon-quest-xi/Coming_of_Age:_The_Prologue': () =>
         fixture('neoseeker/wiki-dqxi-coming-of-age.html'),
+    // Redirect target used by the redirect smoke scenario.
+    'www.neoseeker.com/dragon-quest-xi/Coming_of_Age': () =>
+        fixture('neoseeker/wiki-dqxi-coming-of-age.html'),
     'www.neoseeker.com/dragon-quest-xi/faqs/3043257-bestiary.html': () =>
         fixture('neoseeker/faq-html-dqxi-bestiary.html'),
     'www.neoseeker.com/chrono-trigger/faqs/131223-o.html': () =>
@@ -82,8 +85,10 @@ export const cef = {
     offline: new Set<string>(),
     /** Neoseeker quick-search keywords requested so far, in order. */
     qsRequests: [] as string[],
+    /** Server-side redirects: loading `from` lands the tab on `to`. */
+    redirects: new Map<string, string>(),
     loadUrl: vi.fn((url: string) => {
-        cef.currentUrl = url;
+        cef.currentUrl = cef.redirects.get(url) ?? url;
     }),
     executeInTab: vi.fn(),
     fetchNoCors: vi.fn(),
@@ -92,6 +97,7 @@ export const cef = {
         cef.currentUrl = '';
         cef.blackhole.clear();
         cef.offline.clear();
+        cef.redirects.clear();
         cef.qsRequests.length = 0;
         cef.loadUrl.mockClear();
         cef.executeInTab.mockClear();
@@ -124,7 +130,13 @@ const QS_URL =
 cef.fetchNoCors.mockImplementation((url: string) => {
     if (url.startsWith('http://localhost:8080/json')) {
         const tabs = cef.currentUrl
-            ? [{ url: cefEncode(cef.currentUrl), title: 'DeckFAQs tab' }]
+            ? [
+                  {
+                      id: 'deckfaqs-view',
+                      url: cefEncode(cef.currentUrl),
+                      title: 'DeckFAQs tab',
+                  },
+              ]
             : [];
         return Promise.resolve({
             ok: true,

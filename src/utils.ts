@@ -1,5 +1,6 @@
 import { executeInTab, fetchNoCors } from '@decky/api';
 import type { Dispatch } from 'react';
+import { BLANK_PAGE } from './constants';
 import type { BrowserView, TableOfContentEntry } from './context/AppContext';
 import { ActionType, type AppActions } from './reducers/AppReducer';
 import { sanitizeGuideHtml } from './sanitize';
@@ -35,7 +36,6 @@ async function delay(ms: number, state = null) {
 
 const MAX_POLLING = 100;
 const CEF_TABS_URL = 'http://localhost:8080/json';
-const BLANK_PAGE = 'data:text/html,<body><%2Fbody>';
 
 export const ERROR_NO_BROWSER_VIEW =
     "Steam's browser view is unavailable. Restart Steam and try again.";
@@ -43,7 +43,10 @@ export const ERROR_NO_BROWSER_VIEW =
 const ERROR_UNREACHABLE =
     "Couldn't load the guide. Check the connection and retry.";
 
-type CefTab = { url: string; title: string };
+type CefTab = { id?: string; url: string; title: string };
+
+/** True for the URL the hidden view is parked on between loads. */
+const isParkedUrl = (url: string): boolean => url.startsWith('data:text/html');
 
 // CEF reports the loaded URL percent-encoded (including apostrophes);
 // don't re-encode URLs that already contain escapes.
@@ -158,11 +161,26 @@ const doScrape = async (
         throw new Error(`Refusing to load off-origin URL ${url}`);
     }
     const tabUrl = toCefTabUrl(url);
+    // Our view is the (single) tab parked on the blank page. Remembering its
+    // id lets a same-site redirect (wiki title renamed, apostrophes dropped)
+    // still be found once the exact URL match fails.
+    const parked = (await getDebuggerTabs()).filter((t) => isParkedUrl(t.url));
+    const ownId = parked.length === 1 ? parked[0]?.id : undefined;
     let result = '';
     browserView.LoadURL(url);
     try {
         for (let i = 0; i < MAX_POLLING && !cancelled(); i++) {
-            const tab = (await getDebuggerTabs()).find((t) => t.url === tabUrl);
+            const tabs = await getDebuggerTabs();
+            const tab =
+                tabs.find((t) => t.url === tabUrl) ??
+                (ownId
+                    ? tabs.find(
+                          (t) =>
+                              t.id === ownId &&
+                              !isParkedUrl(t.url) &&
+                              isAllowedScrapeUrl(t.url)
+                      )
+                    : undefined);
             if (tab?.title) result = await runInTab(tab.title, code);
             if (result) break;
             await delay(100);

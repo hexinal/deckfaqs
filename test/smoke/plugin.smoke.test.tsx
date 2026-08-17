@@ -405,6 +405,30 @@ describe('DeckFAQs bundle', () => {
         );
     });
 
+    it('follows a same-site redirect when opening a wiki page', async () => {
+        // Neoseeker redirects renamed wiki titles; the tab is then found by id.
+        cef.redirects.set(
+            'https://www.neoseeker.com/dragon-quest-xi/Coming_of_Age:_The_Prologue',
+            'https://www.neoseeker.com/dragon-quest-xi/Coming_of_Age'
+        );
+        openPanel();
+        await openNeoGuideList();
+        clickButton(/^Walkthrough \(PS4\)/);
+        await waitFor(() =>
+            expect(document.querySelector('#faqwrap.neo-wiki')).not.toBeNull()
+        );
+        const toc = screen.getByRole('combobox', { name: 'TOC' });
+        fireEvent.change(toc, {
+            target: {
+                value: 'https://www.neoseeker.com/dragon-quest-xi/Coming_of_Age:_The_Prologue',
+            },
+        });
+        await waitFor(() =>
+            expect(document.querySelector('#fixture-links')).not.toBeNull()
+        );
+        expect(cef.currentUrl.startsWith('data:text/html')).toBe(true);
+    });
+
     it('renders Neoseeker HTML and text FAQs and map images', async () => {
         openPanel();
         await openNeoGuideList();
