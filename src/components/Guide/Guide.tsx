@@ -61,6 +61,11 @@ export const Guide = ({ fullscreen }: GuideProps) => {
         stateRef.current = state;
     }, [state]);
 
+    // Parsing a guide is the expensive part (single-page FAQs run to megabytes),
+    // so `options` must stay stable across anchor jumps, TOC changes and
+    // restores: handlers read the live guide through stateRef, and only the
+    // guide's URL (which decides the site rules) is a dependency.
+    const guideUrl = currentGuide?.guideUrl;
     const options: HTMLReactParserOptions = useMemo(
         () => ({
             replace: (domNode) => {
@@ -97,7 +102,7 @@ export const Guide = ({ fullscreen }: GuideProps) => {
                                     dispatch({
                                         type: ActionType.UPDATE_GUIDE,
                                         payload: {
-                                            ...currentGuide,
+                                            ...stateRef.current.currentGuide,
                                             anchor,
                                             restore: undefined,
                                         },
@@ -115,8 +120,8 @@ export const Guide = ({ fullscreen }: GuideProps) => {
                                 className={className}
                                 onClick={(e) => {
                                     e.preventDefault();
-                                    const baseUrl =
-                                        currentGuide?.guideUrl ?? '';
+                                    const guide = stateRef.current.currentGuide;
+                                    const baseUrl = guide?.guideUrl ?? '';
                                     request(
                                         { browserView, dispatch },
                                         (ctx) => {
@@ -137,18 +142,18 @@ export const Guide = ({ fullscreen }: GuideProps) => {
                                             dispatch({
                                                 type: ActionType.UPDATE_GUIDE,
                                                 payload: {
-                                                    ...currentGuide,
+                                                    ...guide,
                                                     guideHtml: html,
                                                     anchor: target.anchor,
                                                     page: target.page,
                                                     // Keep the TOC dropdown on the page we landed on.
                                                     currentTocSection:
                                                         tocSectionFor(
-                                                            currentGuide?.guideToc,
+                                                            guide?.guideToc,
                                                             baseUrl,
                                                             target.page
                                                         ) ??
-                                                        currentGuide?.currentTocSection,
+                                                        guide?.currentTocSection,
                                                     restore: undefined,
                                                 },
                                             });
@@ -175,8 +180,7 @@ export const Guide = ({ fullscreen }: GuideProps) => {
                 ) {
                     // Resolve relative image paths against the guide's site; drop
                     // anything outside that source's image hosts.
-                    const guideUrl = currentGuide?.guideUrl ?? '';
-                    const allowed = imageOrigins(sourceOf(guideUrl));
+                    const allowed = imageOrigins(sourceOf(guideUrl ?? ''));
                     let src: string;
                     try {
                         src = new URL(domNode.attribs.src, allowed[0]).href;
@@ -191,7 +195,14 @@ export const Guide = ({ fullscreen }: GuideProps) => {
                 return domNode;
             },
         }),
-        [currentGuide, browserView, dispatch]
+        [guideUrl, browserView, dispatch]
+    );
+
+    // The parsed guide: recomputed only when the HTML (or the site rules) change.
+    const guideHtml = currentGuide?.guideHtml ?? '';
+    const content = useMemo(
+        () => parse(guideHtml, options),
+        [guideHtml, options]
     );
 
     const handleDismiss = useCallback(
@@ -371,7 +382,6 @@ export const Guide = ({ fullscreen }: GuideProps) => {
     // and flush the last known one when this view goes away (Back, fullscreen
     // dismiss, plugin unload). Layout effect: its cleanup runs while the
     // element is still in the document, so the final measurement is real.
-    const guideUrl = currentGuide?.guideUrl;
     const page = currentGuide?.page ?? '';
     useLayoutEffect(() => {
         const el = getScrollElement();
@@ -902,12 +912,12 @@ export const Guide = ({ fullscreen }: GuideProps) => {
                             ].join(' ')}
                             ref={guideDiv}
                         >
-                            {parse(currentGuide?.guideHtml ?? '', options)}
+                            {content}
                         </Focusable>
                     </ScrollPanel>
                 </>
             ),
-        [currentGuide, isLoading, error, fullscreen, options, state.darkMode]
+        [content, isLoading, error, fullscreen, state.darkMode]
     );
 };
 
