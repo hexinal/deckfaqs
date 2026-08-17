@@ -345,7 +345,18 @@ export const neoGuideCode = `function get_neo_guide() {
         for (const el of Array.from(root.querySelectorAll('.text-secondary'))) {
             if (/^-?\\s*Advertisement\\s*-?$/i.test(clean(el.textContent))) el.remove();
         }
-        // Clips are shown as their poster frame (the viewer never plays media).
+        // Full-size image URLs (the site's PhotoSwipe wrappers) travel on the
+        // <img> as data-* attributes so the viewer's lightbox can use them.
+        for (const a of Array.from(root.querySelectorAll('a.image[data-full_image]'))) {
+            const img = a.querySelector('img');
+            if (!img) continue;
+            img.setAttribute('data-full', a.getAttribute('data-full_image'));
+            for (const k of ['data-size', 'data-filename']) {
+                if (a.hasAttribute(k)) img.setAttribute(k, a.getAttribute(k));
+            }
+        }
+        // Clips are shown as their poster frame; the viewer builds a <video>
+        // from the data-video-* URLs when the poster is opened in the lightbox.
         for (const video of Array.from(root.querySelectorAll('video'))) {
             const poster = video.getAttribute('poster');
             if (!poster) {
@@ -356,6 +367,14 @@ export const neoGuideCode = `function get_neo_guide() {
             img.setAttribute('src', poster);
             img.setAttribute('alt', 'Video: ' + (video.getAttribute('data-filename') || ''));
             img.setAttribute('class', 'neo-video');
+            for (const source of Array.from(video.querySelectorAll('source'))) {
+                const src = source.getAttribute('data-src') || source.getAttribute('src');
+                const m = /^video\\/(mp4|webm)$/.exec(source.getAttribute('type') || '');
+                if (src && m) img.setAttribute('data-video-' + m[1], src);
+            }
+            for (const k of ['data-size', 'data-filename']) {
+                if (video.hasAttribute(k)) img.setAttribute(k, video.getAttribute(k));
+            }
             video.replaceWith(img);
         }
     };

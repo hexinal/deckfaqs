@@ -246,6 +246,12 @@ describe('neoGuideCode (Neoseeker wiki and FAQ pages)', () => {
         expect(
             root.querySelector('img[src^="https://cdn.staticneo.com/"]')
         ).not.toBeNull();
+        // The wrapper's full-size URL moves onto the <img> for the lightbox.
+        const thumb = root.querySelector('img[data-full]')!;
+        expect(thumb.getAttribute('data-full')).toMatch(
+            /^https:\/\/cdn\.staticneo\.com\/ew\/.*\.jpg$/
+        );
+        expect(thumb.getAttribute('data-size')).toMatch(/^\d+x\d+$/);
 
         expect(toc[0]).toEqual({
             data: 'https://www.neoseeker.com/dragon-quest-xi/walkthrough',
@@ -370,6 +376,15 @@ describe('neoGuideCode (Neoseeker wiki and FAQ pages)', () => {
             /^https:\/\/cdn\.staticneo\.com\/.*\.jpg$/
         );
         expect(posters[0]?.getAttribute('alt')).toMatch(/^Video: .*\.mp4$/);
+        // Clip URLs and metadata ride along for the lightbox player.
+        expect(posters[0]?.getAttribute('data-video-mp4')).toMatch(
+            /^https:\/\/cdn\.staticneo\.com\/.*\.mp4$/
+        );
+        expect(posters[0]?.getAttribute('data-video-webm')).toMatch(
+            /^https:\/\/cdn\.staticneo\.com\/.*\.webm$/
+        );
+        expect(posters[0]?.getAttribute('data-size')).toBe('800x450');
+        expect(posters[0]?.getAttribute('data-filename')).toMatch(/\.mp4$/);
     });
 
     it('normalises http links and skips red links in the sidebar TOC', () => {

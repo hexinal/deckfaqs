@@ -18,7 +18,7 @@ import {
 } from '@testing-library/react';
 import * as React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cef, deckyApi, loadPlugin, routes, steam } from './env';
+import { Navigation, cef, deckyApi, loadPlugin, routes, steam } from './env';
 
 type Plugin = Awaited<ReturnType<typeof loadPlugin>>;
 let plugin: Plugin;
@@ -403,6 +403,123 @@ describe('DeckFAQs bundle', () => {
         }
     });
 
+    it('opens guide images and clips in a lightbox', async () => {
+        const subPage =
+            'https://www.neoseeker.com/dragon-quest-xi/Coming_of_Age:_The_Prologue';
+        const modal = () => document.querySelector('[data-modal]');
+        openPanel();
+        await openNeoGuideList();
+        clickButton(/^Walkthrough \(PS4\)/);
+        await waitFor(() =>
+            expect(document.querySelector('#faqwrap.neo-wiki')).not.toBeNull()
+        );
+        fireEvent.change(screen.getByRole('combobox', { name: 'TOC' }), {
+            target: { value: subPage },
+        });
+        await waitFor(() =>
+            expect(document.querySelector('#fixture-media')).not.toBeNull()
+        );
+        const page = document.querySelector('#faqwrap')!;
+
+        // A wiki thumbnail opens as its full-size file; tap toggles 1:1.
+        const thumb = page.querySelector<HTMLImageElement>(
+            'img[data-full^="https://cdn.staticneo.com/ew/6/61/"]'
+        )!;
+        fireEvent.click(thumb);
+        const big = modal()!.querySelector('img')!;
+        expect(big.getAttribute('src')).toBe(thumb.dataset.full);
+        const zoomState = () =>
+            modal()!.querySelector('[data-zoom]')!.getAttribute('data-zoom');
+        expect(zoomState()).toBe('fit');
+        // A tap (pointer down/up without moving) zooms to actual size, a
+        // second one back to fit; a drag is not a tap.
+        const view = big.parentElement!;
+        fireEvent.pointerDown(view, { pointerId: 1, clientX: 10, clientY: 10 });
+        fireEvent.pointerUp(view, { pointerId: 1, clientX: 10, clientY: 10 });
+        expect(zoomState()).toBe('zoomed');
+        expect(big.style.transform).toMatch(/scale\(2\)/);
+        fireEvent.pointerDown(view, { pointerId: 1, clientX: 10, clientY: 10 });
+        fireEvent.pointerMove(view, { pointerId: 1, clientX: 60, clientY: 40 });
+        fireEvent.pointerUp(view, { pointerId: 1, clientX: 60, clientY: 40 });
+        expect(zoomState()).toBe('zoomed');
+        fireEvent.pointerDown(view, { pointerId: 1, clientX: 10, clientY: 10 });
+        fireEvent.pointerUp(view, { pointerId: 1, clientX: 10, clientY: 10 });
+        expect(zoomState()).toBe('fit');
+        expect(big.style.transform).toMatch(/scale\(1\)/);
+        // Pinch: two pointers moving apart zoom in.
+        fireEvent.pointerDown(view, {
+            pointerId: 1,
+            clientX: 100,
+            clientY: 100,
+        });
+        fireEvent.pointerDown(view, {
+            pointerId: 2,
+            clientX: 200,
+            clientY: 100,
+        });
+        fireEvent.pointerMove(view, {
+            pointerId: 2,
+            clientX: 300,
+            clientY: 100,
+        });
+        expect(big.style.transform).toMatch(/scale\(2\)/);
+        fireEvent.pointerUp(view, { pointerId: 2, clientX: 300, clientY: 100 });
+        fireEvent.pointerUp(view, { pointerId: 1, clientX: 100, clientY: 100 });
+        expect(zoomState()).toBe('zoomed');
+        Navigation.OpenQuickAccessMenu.mockClear();
+        fireEvent.click(within(modal() as HTMLElement).getByText('Close'));
+        expect(modal()).toBeNull();
+        // The Steam modal hid the Quick Access Menu; it is reopened.
+        expect(Navigation.OpenQuickAccessMenu).toHaveBeenCalled();
+        // The guide itself is untouched.
+        expect(document.querySelector('#fixture-media')).not.toBeNull();
+
+        // A clip: poster with a play badge inline, <video> in the lightbox.
+        const media = page.querySelector('#fixture-media')!;
+        const poster = media.querySelector<HTMLImageElement>(
+            '.neo-video-wrap img[src$="Fixture_Clip.jpg"]'
+        )!;
+        expect(poster).not.toBeNull();
+        fireEvent.click(poster);
+        const video = modal()!.querySelector('video')!;
+        expect(video.getAttribute('poster')).toBe(poster.getAttribute('src'));
+        expect(
+            [...video.querySelectorAll('source')].map((s) => [
+                s.getAttribute('type'),
+                s.getAttribute('src'),
+            ])
+        ).toEqual([
+            [
+                'video/webm',
+                'https://cdn.staticneo.com/ew/f/f1/Fixture_Clip.webm',
+            ],
+            ['video/mp4', 'https://cdn.staticneo.com/ew/f/f1/Fixture_Clip.mp4'],
+        ]);
+        expect(modal()!.textContent).toContain('Fixture_Clip.mp4');
+        fireEvent.click(within(modal() as HTMLElement).getByText('Close'));
+        expect(modal()).toBeNull();
+
+        // Off-site clip sources and full-size URLs are dropped: the poster is
+        // a plain image, the thumbnail opens as itself.
+        const evilPoster = media.querySelector<HTMLImageElement>(
+            'img[src$="Evil_Clip.jpg"]'
+        )!;
+        expect(evilPoster.getAttribute('data-video-mp4')).toBeNull();
+        expect(evilPoster.getAttribute('data-video-webm')).toBeNull();
+        expect(evilPoster.closest('.neo-video-wrap')).toBeNull();
+        const evilThumb = media.querySelector<HTMLImageElement>(
+            'img[src*="Evil_Full"]'
+        )!;
+        expect(evilThumb.getAttribute('data-full')).toBeNull();
+        fireEvent.click(evilThumb);
+        expect(modal()!.querySelector('img')?.getAttribute('src')).toBe(
+            evilThumb.getAttribute('src')
+        );
+        expect(modal()!.innerHTML).not.toContain('evil.example');
+        fireEvent.click(within(modal() as HTMLElement).getByText('Close'));
+        expect(modal()).toBeNull();
+    });
+
     it('lists just the walkthrough for a Neoseeker game whose /faqs/ page is a 404', async () => {
         openPanel();
         await screen.findByText('Installed Games');
@@ -640,6 +757,17 @@ describe('DeckFAQs bundle', () => {
             'https://gamefaqs.gamespot.com/a/faqs/37/69037-4.png'
         );
         expect(image.getAttribute('loading')).toBe('lazy');
+        // Tapping it opens the lightbox (no full-size variant on GameFAQs).
+        fireEvent.click(image);
+        expect(
+            document.querySelector('[data-modal] img')?.getAttribute('src')
+        ).toBe(image.getAttribute('src'));
+        fireEvent.click(
+            within(
+                document.querySelector('[data-modal]') as HTMLElement
+            ).getByText('Close')
+        );
+        expect(document.querySelector('[data-modal]')).toBeNull();
         expect(document.title).not.toBe('pwned');
         expect(faq.querySelector('.ftoc')).toBeNull(); // TOC block replaced by the dropdown
         // Dark mode class applied from settings.

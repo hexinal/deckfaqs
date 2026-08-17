@@ -217,18 +217,23 @@ export const deckyApi = {
 
 // ---------------------------------------------------------------------------
 // @decky/ui stubs (global DFL). Minimal DOM equivalents that keep the props the
-// plugin relies on (onClick/onChange/children/ref/className/style).
+// plugin relies on (DOM event handlers/children/ref/className/style; the
+// gamepad-only props such as onOKButton are dropped, as they have no DOM
+// equivalent).
 // ---------------------------------------------------------------------------
+const DOM_HANDLER = /^on(Click|Pointer|Wheel|Scroll|Key|Touch|Mouse)/;
 const passthrough =
     (tag: 'div' | 'span' | 'button') =>
-    ({ children, className, style, onClick, ref }: Props) =>
+    ({ children, className, style, ref, ...rest }: Props) =>
         React.createElement(
             tag,
             {
                 className: className as string | undefined,
                 style: style as React.CSSProperties | undefined,
-                onClick: onClick as React.MouseEventHandler | undefined,
                 ref: ref as React.Ref<HTMLElement> | undefined,
+                ...Object.fromEntries(
+                    Object.entries(rest).filter(([k]) => DOM_HANDLER.test(k))
+                ),
             },
             children
         );
@@ -369,7 +374,7 @@ const Router = {
     },
 };
 
-const Navigation = {
+export const Navigation = {
     Navigate: vi.fn(),
     NavigateBack: vi.fn(),
     CloseSideMenus: vi.fn(),
@@ -395,6 +400,19 @@ const DFL = {
     Router,
     Navigation,
     QuickAccessTab: { Decky: 999 },
+    // Same values as @decky/ui's enum (the lightbox maps buttons at load time).
+    GamepadButton: {
+        OK: 1,
+        CANCEL: 2,
+        BUMPER_LEFT: 5,
+        BUMPER_RIGHT: 6,
+        TRIGGER_LEFT: 7,
+        TRIGGER_RIGHT: 8,
+        DIR_UP: 9,
+        DIR_DOWN: 10,
+        DIR_LEFT: 11,
+        DIR_RIGHT: 12,
+    },
     staticClasses: { Title: 'Title' },
 };
 

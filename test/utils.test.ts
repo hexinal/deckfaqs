@@ -271,7 +271,10 @@ describe('getGuideHtml', () => {
                     '<table background="//evil.example/t.png"><tr><td>x</td></tr></table>' +
                     '<style>body{display:none}</style><svg><image href="//evil.example/s.png"/></svg>' +
                     '<form action="https://evil.example"><input type="image" src="//evil.example/i.png"><button>go</button></form>' +
-                    '<p>text</p></div>',
+                    '<p>text</p>' +
+                    // Lightbox metadata is plain data-* and survives; the viewer checks its origins.
+                    '<img src="/e.png" data-full="https://cdn.staticneo.com/f.jpg" data-video-webm="https://cdn.staticneo.com/v.webm">' +
+                    '</div>',
                 toc: [],
             }),
         });
@@ -285,6 +288,9 @@ describe('getGuideHtml', () => {
             /<(video|source|picture|style|svg|form|input|button)/
         );
         expect(page.html).toContain('<img src="/a.png">');
+        expect(page.html).toMatch(
+            /<img src="\/e\.png" data-full="https:\/\/cdn\.staticneo\.com\/f\.jpg" data-video-webm="https:\/\/cdn\.staticneo\.com\/v\.webm">/
+        );
         expect(page.html).toContain('<img src="/d.png">');
         expect(page.html).toContain('<td>x</td>');
         expect(page.html).toContain('<p>text</p>');

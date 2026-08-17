@@ -4,6 +4,8 @@ import {
     Navigation,
     QuickAccessTab,
     Router,
+    findSP,
+    showModal,
 } from '@decky/ui';
 import { routerHook, useQuickAccessVisible } from '@decky/api';
 import {
@@ -45,7 +47,11 @@ import { TocDropdown } from '../Nav/TocDropdown';
 import { Search } from '../Nav/Search';
 import { ScrollPanel } from '../ScrollPanel';
 import { ErrorMessage } from '../ErrorMessage';
+import { MediaModal, mediaOf } from './MediaModal';
 import Mark from './mark';
+
+/** Lightbox metadata the extractor leaves on <img> (checked like `src`). */
+const MEDIA_ATTRS = ['data-full', 'data-video-mp4', 'data-video-webm'];
 
 type GuideProps = {
     fullscreen?: boolean;
@@ -85,22 +91,42 @@ export const Guide = ({ fullscreen }: GuideProps) => {
             // anything outside that source's image hosts, and let the
             // browser fetch them lazily (some FAQs embed thousands of icons).
             const allowed = imageOrigins(sourceOf(guideUrl ?? ''));
-            for (const img of Array.from(content.querySelectorAll('img'))) {
-                let src: string;
+            const resolveAllowed = (raw: string): string | undefined => {
                 try {
-                    src = new URL(img.getAttribute('src') ?? '', allowed[0])
-                        .href;
+                    const href = new URL(raw, allowed[0]).href;
+                    return allowed.some((origin) =>
+                        href.startsWith(`${origin}/`)
+                    )
+                        ? href
+                        : undefined;
                 } catch {
-                    img.remove();
-                    continue;
+                    return undefined;
                 }
-                if (!allowed.some((origin) => src.startsWith(`${origin}/`))) {
+            };
+            for (const img of Array.from(content.querySelectorAll('img'))) {
+                const src = resolveAllowed(img.getAttribute('src') ?? '');
+                if (!src) {
                     img.remove();
                     continue;
                 }
                 img.setAttribute('src', src);
                 img.setAttribute('loading', 'lazy');
                 img.setAttribute('decoding', 'async');
+                // Lightbox URLs get the same treatment; unusable ones are dropped.
+                for (const attr of MEDIA_ATTRS) {
+                    const raw = img.getAttribute(attr);
+                    if (raw === null) continue;
+                    const href = resolveAllowed(raw);
+                    if (href) img.setAttribute(attr, href);
+                    else img.removeAttribute(attr);
+                }
+                // A playable clip: the poster gets a play badge (CSS on the wrapper).
+                if (img.dataset.videoMp4 || img.dataset.videoWebm) {
+                    const wrap = document.createElement('span');
+                    wrap.className = 'neo-video-wrap';
+                    img.replaceWith(wrap);
+                    wrap.append(img);
+                }
             }
             // GameFAQs' inline TOC is replaced by the dropdown.
             for (const toc of Array.from(content.querySelectorAll('.ftoc'))) {
@@ -121,8 +147,22 @@ export const Guide = ({ fullscreen }: GuideProps) => {
         (e: React.MouseEvent<HTMLDivElement>) => {
             const host = hostRef.current;
             const target = e.target as Element | null;
+            if (!host) return;
+            // Tapping an image or clip poster opens it in the lightbox.
+            const img = target?.closest('img');
+            if (img && host.contains(img)) {
+                e.preventDefault();
+                showModal(
+                    <MediaModal
+                        media={mediaOf(img)}
+                        reopenQuickAccess={!fullscreen}
+                    />,
+                    findSP()
+                );
+                return;
+            }
             const link = target?.closest('a[href]');
-            if (!host || !link || !host.contains(link)) return;
+            if (!link || !host.contains(link)) return;
             e.preventDefault();
             const href = link.getAttribute('href') ?? '';
             const guide = stateRef.current.currentGuide;
@@ -184,7 +224,7 @@ export const Guide = ({ fullscreen }: GuideProps) => {
                 }
             );
         },
-        [browserView, dispatch]
+        [browserView, dispatch, fullscreen]
     );
 
     const handleDismiss = useCallback(
@@ -507,8 +547,40 @@ export const Guide = ({ fullscreen }: GuideProps) => {
                       .deckfaqs_dark {
                         filter: invert(1)
                       }
-                      .deckfaqs_dark img:not(.ignore-color-scheme),video:not(.ignore-color-scheme) {
+                      .deckfaqs_dark img:not(.ignore-color-scheme) {
                         filter: brightness(50%) invert(100%);
+                      }
+                      .deckfaqs_guide img {
+                        cursor: pointer;
+                      }
+                      .ffaq .neo-video-wrap {
+                        position: relative;
+                        display: inline-block;
+                        max-width: 100%;
+                        line-height: 0;
+                      }
+                      .ffaq .neo-video-wrap::after {
+                        content: '';
+                        position: absolute;
+                        left: 50%;
+                        top: 50%;
+                        width: 44px;
+                        height: 44px;
+                        border-radius: 50%;
+                        background: rgba(0, 0, 0, 0.55);
+                        transform: translate(-50%, -50%);
+                        pointer-events: none;
+                      }
+                      .ffaq .neo-video-wrap::before {
+                        content: '';
+                        position: absolute;
+                        left: calc(50% - 6px);
+                        top: calc(50% - 10px);
+                        border-left: 16px solid #fff;
+                        border-top: 10px solid transparent;
+                        border-bottom: 10px solid transparent;
+                        z-index: 1;
+                        pointer-events: none;
                       }
                       .deckfaqs_dark .deckfaqs_highlight {
                         filter: invert(1)
