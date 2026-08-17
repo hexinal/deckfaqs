@@ -44,11 +44,18 @@ export const qsEscape = (name: string): string => {
  * Keywords to try, best first: the name as is, then cut at a subtitle
  * separator, then with trailing words dropped (never down to one word: the
  * index matches word-wise and single words return unrelated games).
+ * Diacritics are folded and hyphens count as word breaks: the index knows
+ * "god war ragnarok" and "marvels spider man", not "ragnark"/"spiderman".
  */
 export const qsCandidates = (name: string): string[] => {
     const out: string[] = [];
     const push = (candidate: string, derived = false) => {
-        const kw = qsEscape(candidate);
+        const kw = qsEscape(
+            candidate
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .replace(/[-–—]/g, ' ')
+        );
         if (!kw || out.includes(kw)) return;
         if (derived && !kw.includes('_')) return;
         out.push(kw);

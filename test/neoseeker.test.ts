@@ -52,7 +52,7 @@ describe('qsCandidates', () => {
             'dragon_quest',
         ]);
         expect(qsCandidates('Final Fantasy X/X-2 HD Remaster')).toEqual([
-            'final_fantasy_xx2_hd_re',
+            'final_fantasy_xx_2_hd_re',
             'final_fantasy_x',
             'final_fantasy',
         ]);
@@ -62,6 +62,30 @@ describe('qsCandidates', () => {
             'sekiro',
         ]);
     });
+    it('folds diacritics and treats hyphens as word breaks', () => {
+        expect(qsCandidates('God of War Ragnarök')).toEqual([
+            'god_war_ragnarok',
+            'god_war',
+        ]);
+        expect(qsCandidates("Marvel's Spider-Man Remastered")).toEqual([
+            'marvels_spider_man_remas',
+            'marvels_spider_man',
+        ]);
+        expect(qsCandidates('Half-Life 2')).toEqual(['half_life_2']);
+        expect(qsCandidates('Half-Life: Alyx')).toEqual([
+            'half_life_alyx',
+            'half_life',
+        ]);
+        expect(qsCandidates('Pokémon Legends: Arceus')).toEqual([
+            'pokemon_legends_arceus',
+            'pokemon_legends',
+        ]);
+        // A subtitle after " - " is still cut off first.
+        expect(
+            qsCandidates('The Witcher 3: Wild Hunt - Complete Edition')
+        ).toEqual(['witcher_3_wild_hunt___co', 'witcher_3']);
+    });
+
     it('never derives single-word keywords and stops at four', () => {
         expect(
             qsCandidates('The Legend of Zelda: Tears of the Kingdom')
