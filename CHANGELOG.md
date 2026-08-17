@@ -1,3 +1,9 @@
+## [2.2.0](https://github.com/hexinal/deckfaqs/compare/v2.1.0...v2.2.0) (2026-08-17)
+
+### Features
+
+* add Neoseeker as a second guide source ([#18](https://github.com/hexinal/deckfaqs/issues/18)) ([435eb66](https://github.com/hexinal/deckfaqs/commit/435eb66352d5f12025d731eb0a88b560cc7ccaa4)), closes [#faqwrap](https://github.com/hexinal/deckfaqs/issues/faqwrap) [#toc](https://github.com/hexinal/deckfaqs/issues/toc) [#section](https://github.com/hexinal/deckfaqs/issues/section)
+
 ## [2.1.0](https://github.com/hexinal/deckfaqs/compare/v2.0.7...v2.1.0) (2026-08-16)
 
 ### Features
