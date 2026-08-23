@@ -360,6 +360,9 @@ export const steam = {
     ]),
     runningApp: { display_name: 'Final Fantasy X' } as
         { display_name: string } | undefined,
+    // The latest RegisterForControllerStateChanges callback (trackpad scroll).
+    controllerCb: undefined as
+        ((changes: Record<string, number>[]) => void) | undefined,
 };
 
 const Router = {
@@ -454,6 +457,19 @@ const SteamClient = {
     },
     Apps: {
         RegisterForGameActionStart: () => ({ unregister: vi.fn() }),
+    },
+    Input: {
+        RegisterForControllerStateChanges: (
+            cb: (changes: Record<string, number>[]) => void
+        ) => {
+            steam.controllerCb = cb;
+            return {
+                unregister: vi.fn(() => {
+                    if (steam.controllerCb === cb)
+                        steam.controllerCb = undefined;
+                }),
+            };
+        },
     },
     BrowserView: {
         Destroy: cef.destroyed,

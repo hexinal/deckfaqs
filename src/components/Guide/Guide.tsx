@@ -53,6 +53,9 @@ import Mark from './mark';
 /** Lightbox metadata the extractor leaves on <img> (checked like `src`). */
 const MEDIA_ATTRS = ['data-full', 'data-video-mp4', 'data-video-webm'];
 
+/** Viewports scrolled per full right-trackpad swipe (QAM guide view). */
+const PAD_SCROLL_SCALE = 1.5;
+
 type GuideProps = {
     fullscreen?: boolean;
 };
@@ -468,6 +471,40 @@ export const Guide = ({ fullscreen }: GuideProps) => {
         qamVisible,
         browserView,
     ]);
+
+    // Scroll the QAM guide with the right trackpad — Decky menus don't use
+    // it, and Steam's focus navigation never scrolls our ScrollPanel there.
+    // The pad reports (0, 0) only while untouched, so a nonzero coordinate
+    // doubles as the touch flag. Not in fullscreen, where the trackpad is a
+    // mouse over a regular page and scrolling already works.
+    const padPrevY = useRef<number | null>(null);
+    useEffect(() => {
+        if (fullscreen || !qamVisible || !guideHtml || isLoading || error)
+            return;
+        padPrevY.current = null;
+        const reg = SteamClient.Input.RegisterForControllerStateChanges(
+            (changes) => {
+                const el = getScrollElement();
+                if (!el) return;
+                for (const c of changes) {
+                    if (c.sRightPadX === 0 && c.sRightPadY === 0) {
+                        padPrevY.current = null; // finger lifted
+                        continue;
+                    }
+                    const prev = padPrevY.current;
+                    padPrevY.current = c.sRightPadY;
+                    if (prev === null) continue;
+                    // Finger up (+Y) scrolls content up, like the touchscreen.
+                    el.scrollTop +=
+                        ((c.sRightPadY - prev) *
+                            el.clientHeight *
+                            PAD_SCROLL_SCALE) /
+                        65536;
+                }
+            }
+        );
+        return () => reg.unregister();
+    }, [fullscreen, qamVisible, guideHtml, isLoading, error, getScrollElement]);
 
     // Restore a saved position: `restore` is set when the guide is opened
     // from the list (or handed back from fullscreen); on first mount fall back

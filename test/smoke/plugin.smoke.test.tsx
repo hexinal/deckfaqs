@@ -288,6 +288,38 @@ describe('DeckFAQs bundle', () => {
         };
     };
 
+    it('scrolls the guide with the right trackpad', async () => {
+        const undoLayout = fakeLayout();
+        try {
+            openPanel();
+            await openGuide();
+            const scroller =
+                document.querySelector('.deckfaqs_guide')!.parentElement!;
+            await waitFor(() => expect(steam.controllerCb).toBeDefined());
+            const pad = (x: number, y: number) => ({
+                sRightPadX: x,
+                sRightPadY: y,
+            });
+            act(() => {
+                steam.controllerCb!([pad(1, 0)]); // touch down: records only
+                steam.controllerCb!([pad(1, 8192)]); // swipe up 1/8 of the pad
+            });
+            // 8192/65536 of a swipe × 1.5 viewports × 200px viewport = 37.5px.
+            expect(scroller.scrollTop).toBeCloseTo(37.5);
+            act(() => {
+                steam.controllerCb!([pad(0, 0)]); // finger lifted
+                steam.controllerCb!([pad(1, -8000)]); // re-touch elsewhere…
+            });
+            expect(scroller.scrollTop).toBeCloseTo(37.5); // …must not jump
+            act(() => {
+                steam.controllerCb!([pad(1, -8000 + 4096)]);
+            });
+            expect(scroller.scrollTop).toBeCloseTo(37.5 + 18.75);
+        } finally {
+            undoLayout();
+        }
+    });
+
     it('renders a Neoseeker wiki walkthrough with its TOC, sub-pages and positions', async () => {
         const undoLayout = fakeLayout();
         const guideUrl =
