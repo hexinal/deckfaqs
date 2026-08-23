@@ -1,3 +1,9 @@
+## [2.2.1](https://github.com/hexinal/deckfaqs/compare/v2.2.0...v2.2.1) (2026-08-23)
+
+### Bug Fixes
+
+* scroll the guide with the right trackpad in the quick access menu ([#19](https://github.com/hexinal/deckfaqs/issues/19)) ([8257b8b](https://github.com/hexinal/deckfaqs/commit/8257b8ba30dd7e4e5f93430f11efdb80a3503a1c))
+
 ## [2.2.0](https://github.com/hexinal/deckfaqs/compare/v2.1.0...v2.2.0) (2026-08-17)
 
 ### Features
