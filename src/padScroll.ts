@@ -17,7 +17,13 @@ const UNITS_PER_SWIPE = 600;
  * convention: finger down drags the content down). Returns the cleanup, or
  * undefined when the Steam client lacks the API — Valve shuffles these
  * between versions and the @decky/ui typings are aspirational, so a missing
- * method must degrade to no trackpad scrolling, not crash the guide view.
+ * or changed API must degrade to no trackpad scrolling, not crash the guide
+ * view. The same distrust extends to the payload: a delta is applied only
+ * when it is finite, plausibly swipe-sized (a reset or clamp of the
+ * accumulator, or a second controller's interleaved stream, is a
+ * reposition, not a swipe) and from the same source as the previous
+ * message. Note the enable switch is global and refcount-free: another
+ * plugin toggling it can silently stop or restart the stream under us.
  */
 export const registerPadScroll = (
     getEl: () => HTMLElement | null
@@ -28,21 +34,41 @@ export const registerPadScroll = (
         typeof input.EnableControllerAnalogInputMessages !== 'function'
     )
         return undefined;
+    let prevA = NaN; // identity args of the previous message
+    let prevB = NaN;
     let prevY: number | null = null;
     input.EnableControllerAnalogInputMessages(true);
-    const reg = input.RegisterForControllerAnalogInputMessages(
-        (_a: number, _b: number, _c: boolean, _x: number, y: number) => {
-            const prev = prevY;
-            prevY = y;
-            if (prev === null) return; // first message: position only
-            const el = getEl();
-            if (!el) return;
-            el.scrollTop -=
-                ((y - prev) * el.clientHeight * SCROLL_SCALE) / UNITS_PER_SWIPE;
-        }
-    );
-    return () => {
-        reg.unregister();
+    let reg;
+    try {
+        reg = input.RegisterForControllerAnalogInputMessages(
+            (a: number, b: number, _c: boolean, _x: number, y: number) => {
+                const prev = prevY;
+                const sameSource = a === prevA && b === prevB;
+                prevA = a;
+                prevB = b;
+                prevY = y;
+                if (prev === null || !sameSource) return; // position only
+                const delta = y - prev;
+                if (
+                    !Number.isFinite(delta) ||
+                    Math.abs(delta) > UNITS_PER_SWIPE
+                )
+                    return;
+                const el = getEl();
+                if (!el) return;
+                el.scrollTop -=
+                    (delta * el.clientHeight * SCROLL_SCALE) / UNITS_PER_SWIPE;
+            }
+        );
+    } catch {
         input.EnableControllerAnalogInputMessages(false);
+        return undefined;
+    }
+    return () => {
+        try {
+            reg?.unregister?.();
+        } finally {
+            input.EnableControllerAnalogInputMessages(false);
+        }
     };
 };

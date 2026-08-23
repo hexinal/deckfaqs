@@ -40,6 +40,9 @@ declare module '@decky/ui/dist/components/TextField' {
     }
 }
 
+// NB: the Input typings are stale in places — RegisterForControllerStateChanges
+// no longer exists at runtime (probed on a real Deck, 2026-08; calling it
+// crashed the guide view before commit 6245221 guarded it).
 declare module '@decky/ui/dist/globals/steam-client/Input' {
     interface Input {
         /** Gates the analog input message stream; off by default. */
@@ -49,7 +52,9 @@ declare module '@decky/ui/dist/globals/steam-client/Input' {
          * fires): x/y are Steam's accumulated virtual-mouse position, fed by
          * the right trackpad and right stick, y growing downward. Messages
          * arrive only while there is input and require
-         * EnableControllerAnalogInputMessages(true).
+         * EnableControllerAnalogInputMessages(true). Merging this overload
+         * first also makes implicit callback params contextually type as
+         * number — deliberate, since the array form is dead.
          */
         RegisterForControllerAnalogInputMessages(
             callback: (
