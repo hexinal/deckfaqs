@@ -482,6 +482,14 @@ export const Guide = ({ fullscreen }: GuideProps) => {
         if (fullscreen || !qamVisible || !guideHtml || isLoading || error)
             return;
         padPrevY.current = null;
+        // Valve shuffles these APIs between Steam versions (the @decky/ui
+        // typings are aspirational): a missing method must degrade to
+        // no trackpad scrolling, not crash the guide view.
+        if (
+            typeof SteamClient.Input?.RegisterForControllerStateChanges !==
+            'function'
+        )
+            return;
         const reg = SteamClient.Input.RegisterForControllerStateChanges(
             (changes) => {
                 const el = getScrollElement();
