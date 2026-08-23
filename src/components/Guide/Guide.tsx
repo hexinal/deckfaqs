@@ -43,6 +43,7 @@ import {
     restoreTarget,
     savePosition,
 } from '../../positions';
+import { registerPadScroll } from '../../padScroll';
 import { TocDropdown } from '../Nav/TocDropdown';
 import { Search } from '../Nav/Search';
 import { ScrollPanel } from '../ScrollPanel';
@@ -52,11 +53,6 @@ import Mark from './mark';
 
 /** Lightbox metadata the extractor leaves on <img> (checked like `src`). */
 const MEDIA_ATTRS = ['data-full', 'data-video-mp4', 'data-video-webm'];
-
-/** Viewports scrolled per full right-trackpad swipe (QAM guide view). */
-const PAD_SCROLL_SCALE = 1.5;
-/** Mouse-accumulator units one full trackpad swipe covers (measured). */
-const PAD_UNITS_PER_SWIPE = 600;
 
 type GuideProps = {
     fullscreen?: boolean;
@@ -474,46 +470,13 @@ export const Guide = ({ fullscreen }: GuideProps) => {
         browserView,
     ]);
 
-    // Scroll the QAM guide with the right trackpad (or right stick — both
-    // feed Steam's virtual-mouse accumulator; neither is used by Decky menu
-    // navigation). Analog messages are off by default and report the
-    // accumulated cursor position (y grows downward, only while there is
-    // input, persistent across touches — flick inertia keeps emitting, so
-    // kinetic scrolling comes for free). Not in fullscreen, where the
-    // trackpad is a real mouse over a regular page and already scrolls.
-    const padPrevY = useRef<number | null>(null);
+    // Scroll the QAM guide with the right trackpad (see padScroll.ts). Not
+    // in fullscreen, where the trackpad is a real mouse over a regular page
+    // and already scrolls.
     useEffect(() => {
         if (fullscreen || !qamVisible || !guideHtml || isLoading || error)
             return;
-        // Valve shuffles these APIs between Steam versions (the @decky/ui
-        // typings are aspirational): a missing method must degrade to
-        // no trackpad scrolling, not crash the guide view.
-        const input: typeof SteamClient.Input | undefined = SteamClient.Input;
-        if (
-            typeof input?.RegisterForControllerAnalogInputMessages !==
-                'function' ||
-            typeof input.EnableControllerAnalogInputMessages !== 'function'
-        )
-            return;
-        padPrevY.current = null;
-        input.EnableControllerAnalogInputMessages(true);
-        const reg = input.RegisterForControllerAnalogInputMessages(
-            (_a: number, _b: number, _c: boolean, _x: number, y: number) => {
-                const prev = padPrevY.current;
-                padPrevY.current = y;
-                if (prev === null) return;
-                const el = getScrollElement();
-                if (!el) return;
-                // Finger down (+y) drags the content down, like the touchscreen.
-                el.scrollTop -=
-                    ((y - prev) * el.clientHeight * PAD_SCROLL_SCALE) /
-                    PAD_UNITS_PER_SWIPE;
-            }
-        );
-        return () => {
-            reg.unregister();
-            input.EnableControllerAnalogInputMessages(false);
-        };
+        return registerPadScroll(getScrollElement);
     }, [fullscreen, qamVisible, guideHtml, isLoading, error, getScrollElement]);
 
     // Restore a saved position: `restore` is set when the guide is opened
