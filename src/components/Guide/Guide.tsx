@@ -43,6 +43,7 @@ import {
     restoreTarget,
     savePosition,
 } from '../../positions';
+import { registerPadScroll } from '../../padScroll';
 import { TocDropdown } from '../Nav/TocDropdown';
 import { Search } from '../Nav/Search';
 import { ScrollPanel } from '../ScrollPanel';
@@ -468,6 +469,15 @@ export const Guide = ({ fullscreen }: GuideProps) => {
         qamVisible,
         browserView,
     ]);
+
+    // Scroll the QAM guide with the right trackpad (see padScroll.ts). Not
+    // in fullscreen, where the trackpad is a real mouse over a regular page
+    // and already scrolls.
+    useEffect(() => {
+        if (fullscreen || !qamVisible || !guideHtml || isLoading || error)
+            return;
+        return registerPadScroll(getScrollElement);
+    }, [fullscreen, qamVisible, guideHtml, isLoading, error, getScrollElement]);
 
     // Restore a saved position: `restore` is set when the guide is opened
     // from the list (or handed back from fullscreen); on first mount fall back

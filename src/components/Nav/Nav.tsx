@@ -241,6 +241,7 @@ export const Nav = () => {
                     <DropdownItem
                         label="Guide source"
                         description="Which sites to search for guides"
+                        layout="below"
                         disableNavSounds={true}
                         rgOptions={SOURCE_OPTIONS}
                         selectedOption={source}
