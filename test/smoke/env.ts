@@ -212,19 +212,8 @@ export const deckyApi = {
     injectCssIntoTab: vi.fn(),
     removeCssFromTab: vi.fn(),
     getExternalResourceURL: vi.fn(),
-    useQuickAccessVisible: () =>
-        React.useSyncExternalStore(
-            (cb) => {
-                qamSubs.add(cb);
-                return () => qamSubs.delete(cb);
-            },
-            () => qamVisible
-        ),
+    useQuickAccessVisible: () => true,
 };
-
-// QAM visibility, toggled by tests via steam.setQamVisible.
-let qamVisible = true;
-const qamSubs = new Set<() => void>();
 
 // ---------------------------------------------------------------------------
 // @decky/ui stubs (global DFL). Minimal DOM equivalents that keep the props the
@@ -371,19 +360,6 @@ export const steam = {
     ]),
     runningApp: { display_name: 'Final Fantasy X' } as
         { display_name: string } | undefined,
-    // The latest RegisterForControllerAnalogInputMessages callback (trackpad
-    // scroll), the count of live registrations (a leaked one means the guide
-    // scrolls N× too fast), and the EnableControllerAnalogInputMessages call
-    // log in order (last entry = current state).
-    controllerCb: undefined as
-        | ((a: number, b: number, c: boolean, x: number, y: number) => void)
-        | undefined,
-    analogRegistrations: 0,
-    analogCalls: [] as boolean[],
-    setQamVisible(visible: boolean) {
-        qamVisible = visible;
-        qamSubs.forEach((cb) => cb());
-    },
 };
 
 const Router = {
@@ -478,27 +454,6 @@ const SteamClient = {
     },
     Apps: {
         RegisterForGameActionStart: () => ({ unregister: vi.fn() }),
-    },
-    Input: {
-        EnableControllerAnalogInputMessages: (enable: boolean) => {
-            steam.analogCalls.push(enable);
-        },
-        RegisterForControllerAnalogInputMessages: (
-            cb: NonNullable<typeof steam.controllerCb>
-        ) => {
-            steam.analogRegistrations++;
-            steam.controllerCb = cb;
-            let live = true;
-            return {
-                unregister: vi.fn(() => {
-                    if (!live) return;
-                    live = false;
-                    steam.analogRegistrations--;
-                    if (steam.controllerCb === cb)
-                        steam.controllerCb = undefined;
-                }),
-            };
-        },
     },
     BrowserView: {
         Destroy: cef.destroyed,
