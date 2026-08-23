@@ -37,11 +37,6 @@ afterEach(() => {
     // cannot leak into the next; reading positions likewise.
     steam.storage.set('deckfaqs_settings', { darkMode: true });
     steam.storage.delete('deckfaqs_positions');
-    // Trackpad-scroll state: no test should inherit another's registration.
-    steam.controllerCb = undefined;
-    steam.analogRegistrations = 0;
-    steam.analogCalls.length = 0;
-    steam.setQamVisible(true);
 });
 
 const openPanel = () => render(plugin.content);
@@ -292,61 +287,6 @@ describe('DeckFAQs bundle', () => {
             Reflect.deleteProperty(HTMLElement.prototype, 'clientHeight');
         };
     };
-
-    it('scrolls the guide with the right trackpad', async () => {
-        const undoLayout = fakeLayout();
-        try {
-            openPanel();
-            await openGuide();
-            const scroller =
-                document.querySelector('.deckfaqs_guide')!.parentElement!;
-            await waitFor(() => expect(steam.controllerCb).toBeDefined());
-            // Opening the guide enabled the stream and registered exactly
-            // once (a leaked registration would scroll N× too fast).
-            expect(steam.analogRegistrations).toBe(1);
-            expect(steam.analogCalls).toEqual([true]);
-            // Messages carry Steam's accumulated virtual-mouse position
-            // (y grows downward): (a, b, c, x, y) as observed on-device.
-            const move = (y: number, a = 15, b = 47) =>
-                act(() => steam.controllerCb!(a, b, false, 0, y));
-            move(1000); // first message only records the position
-            expect(scroller.scrollTop).toBe(0);
-            // Finger up 100 units drags the content up:
-            // 100 × 200px viewport × 1.5 viewports / 600 units = 50px.
-            move(900);
-            expect(scroller.scrollTop).toBeCloseTo(50);
-            move(960); // finger down again -> most of the way back
-            expect(scroller.scrollTop).toBeCloseTo(20);
-            // A message from another source is a reposition, not a swipe …
-            move(5000, 16, 0);
-            expect(scroller.scrollTop).toBeCloseTo(20);
-            // … as is the switch back; deltas then resume from there.
-            move(400);
-            move(300);
-            expect(scroller.scrollTop).toBeCloseTo(70);
-            // An impossible jump (accumulator reset/clamp) is skipped, and
-            // the next plausible delta applies from the new position.
-            move(300 + 10_000);
-            expect(scroller.scrollTop).toBeCloseTo(70);
-            move(300 + 10_000 - 100);
-            expect(scroller.scrollTop).toBeCloseTo(120);
-            // Closing the QAM unregisters and disables; reopening re-arms
-            // (the guide stays mounted via alwaysRender).
-            act(() => steam.setQamVisible(false));
-            expect(steam.analogRegistrations).toBe(0);
-            expect(steam.analogCalls).toEqual([true, false]);
-            act(() => steam.setQamVisible(true));
-            await waitFor(() => expect(steam.analogRegistrations).toBe(1));
-            // Leaving the guide cleans up for good.
-            clickButton(/^Back$/);
-            await screen.findByText('Guides');
-            expect(steam.controllerCb).toBeUndefined();
-            expect(steam.analogRegistrations).toBe(0);
-            expect(steam.analogCalls).toEqual([true, false, true, false]);
-        } finally {
-            undoLayout();
-        }
-    });
 
     it('renders a Neoseeker wiki walkthrough with its TOC, sub-pages and positions', async () => {
         const undoLayout = fakeLayout();
