@@ -1,3 +1,9 @@
+## [2.2.2](https://github.com/hexinal/deckfaqs/compare/v2.2.1...v2.2.2) (2026-08-23)
+
+### Reverts
+
+* remove right-trackpad scrolling from the quick access menu guide ([#20](https://github.com/hexinal/deckfaqs/issues/20)) ([a1f3f3f](https://github.com/hexinal/deckfaqs/commit/a1f3f3f59d900b79cd9babee5c719ebabd2aa8a5))
+
 ## [2.2.1](https://github.com/hexinal/deckfaqs/compare/v2.2.0...v2.2.1) (2026-08-23)
 
 ### Bug Fixes
