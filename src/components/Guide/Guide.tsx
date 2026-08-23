@@ -55,6 +55,8 @@ const MEDIA_ATTRS = ['data-full', 'data-video-mp4', 'data-video-webm'];
 
 /** Viewports scrolled per full right-trackpad swipe (QAM guide view). */
 const PAD_SCROLL_SCALE = 1.5;
+/** Mouse-accumulator units one full trackpad swipe covers (measured). */
+const PAD_UNITS_PER_SWIPE = 600;
 
 type GuideProps = {
     fullscreen?: boolean;
@@ -472,46 +474,46 @@ export const Guide = ({ fullscreen }: GuideProps) => {
         browserView,
     ]);
 
-    // Scroll the QAM guide with the right trackpad — Decky menus don't use
-    // it, and Steam's focus navigation never scrolls our ScrollPanel there.
-    // The pad reports (0, 0) only while untouched, so a nonzero coordinate
-    // doubles as the touch flag. Not in fullscreen, where the trackpad is a
-    // mouse over a regular page and scrolling already works.
+    // Scroll the QAM guide with the right trackpad (or right stick — both
+    // feed Steam's virtual-mouse accumulator; neither is used by Decky menu
+    // navigation). Analog messages are off by default and report the
+    // accumulated cursor position (y grows downward, only while there is
+    // input, persistent across touches — flick inertia keeps emitting, so
+    // kinetic scrolling comes for free). Not in fullscreen, where the
+    // trackpad is a real mouse over a regular page and already scrolls.
     const padPrevY = useRef<number | null>(null);
     useEffect(() => {
         if (fullscreen || !qamVisible || !guideHtml || isLoading || error)
             return;
-        padPrevY.current = null;
         // Valve shuffles these APIs between Steam versions (the @decky/ui
         // typings are aspirational): a missing method must degrade to
         // no trackpad scrolling, not crash the guide view.
+        const input: typeof SteamClient.Input | undefined = SteamClient.Input;
         if (
-            typeof SteamClient.Input?.RegisterForControllerStateChanges !==
-            'function'
+            typeof input?.RegisterForControllerAnalogInputMessages !==
+                'function' ||
+            typeof input.EnableControllerAnalogInputMessages !== 'function'
         )
             return;
-        const reg = SteamClient.Input.RegisterForControllerStateChanges(
-            (changes) => {
+        padPrevY.current = null;
+        input.EnableControllerAnalogInputMessages(true);
+        const reg = input.RegisterForControllerAnalogInputMessages(
+            (_a: number, _b: number, _c: boolean, _x: number, y: number) => {
+                const prev = padPrevY.current;
+                padPrevY.current = y;
+                if (prev === null) return;
                 const el = getScrollElement();
                 if (!el) return;
-                for (const c of changes) {
-                    if (c.sRightPadX === 0 && c.sRightPadY === 0) {
-                        padPrevY.current = null; // finger lifted
-                        continue;
-                    }
-                    const prev = padPrevY.current;
-                    padPrevY.current = c.sRightPadY;
-                    if (prev === null) continue;
-                    // Finger up (+Y) scrolls content up, like the touchscreen.
-                    el.scrollTop +=
-                        ((c.sRightPadY - prev) *
-                            el.clientHeight *
-                            PAD_SCROLL_SCALE) /
-                        65536;
-                }
+                // Finger down (+y) drags the content down, like the touchscreen.
+                el.scrollTop -=
+                    ((y - prev) * el.clientHeight * PAD_SCROLL_SCALE) /
+                    PAD_UNITS_PER_SWIPE;
             }
         );
-        return () => reg.unregister();
+        return () => {
+            reg.unregister();
+            input.EnableControllerAnalogInputMessages(false);
+        };
     }, [fullscreen, qamVisible, guideHtml, isLoading, error, getScrollElement]);
 
     // Restore a saved position: `restore` is set when the guide is opened

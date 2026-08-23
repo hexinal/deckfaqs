@@ -360,9 +360,12 @@ export const steam = {
     ]),
     runningApp: { display_name: 'Final Fantasy X' } as
         { display_name: string } | undefined,
-    // The latest RegisterForControllerStateChanges callback (trackpad scroll).
+    // The latest RegisterForControllerAnalogInputMessages callback (trackpad
+    // scroll) and the current EnableControllerAnalogInputMessages state.
     controllerCb: undefined as
-        ((changes: Record<string, number>[]) => void) | undefined,
+        | ((a: number, b: number, c: boolean, x: number, y: number) => void)
+        | undefined,
+    analogEnabled: false,
 };
 
 const Router = {
@@ -459,8 +462,11 @@ const SteamClient = {
         RegisterForGameActionStart: () => ({ unregister: vi.fn() }),
     },
     Input: {
-        RegisterForControllerStateChanges: (
-            cb: (changes: Record<string, number>[]) => void
+        EnableControllerAnalogInputMessages: vi.fn((enable: boolean) => {
+            steam.analogEnabled = enable;
+        }),
+        RegisterForControllerAnalogInputMessages: (
+            cb: NonNullable<typeof steam.controllerCb>
         ) => {
             steam.controllerCb = cb;
             return {

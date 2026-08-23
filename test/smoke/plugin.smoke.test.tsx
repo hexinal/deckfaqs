@@ -296,25 +296,25 @@ describe('DeckFAQs bundle', () => {
             const scroller =
                 document.querySelector('.deckfaqs_guide')!.parentElement!;
             await waitFor(() => expect(steam.controllerCb).toBeDefined());
-            const pad = (x: number, y: number) => ({
-                sRightPadX: x,
-                sRightPadY: y,
-            });
-            act(() => {
-                steam.controllerCb!([pad(1, 0)]); // touch down: records only
-                steam.controllerCb!([pad(1, 8192)]); // swipe up 1/8 of the pad
-            });
-            // 8192/65536 of a swipe × 1.5 viewports × 200px viewport = 37.5px.
-            expect(scroller.scrollTop).toBeCloseTo(37.5);
-            act(() => {
-                steam.controllerCb!([pad(0, 0)]); // finger lifted
-                steam.controllerCb!([pad(1, -8000)]); // re-touch elsewhere…
-            });
-            expect(scroller.scrollTop).toBeCloseTo(37.5); // …must not jump
-            act(() => {
-                steam.controllerCb!([pad(1, -8000 + 4096)]);
-            });
-            expect(scroller.scrollTop).toBeCloseTo(37.5 + 18.75);
+            // Opening the guide turned the analog message stream on.
+            expect(steam.analogEnabled).toBe(true);
+            // Messages carry Steam's accumulated virtual-mouse position
+            // (y grows downward): (a, b, c, x, y) as observed on-device.
+            const move = (y: number) =>
+                act(() => steam.controllerCb!(15, 47, false, 0, y));
+            move(1000); // first message only records the position
+            expect(scroller.scrollTop).toBe(0);
+            // Finger up 100 units drags the content up:
+            // 100 × 200px viewport × 1.5 viewports / 600 units = 50px.
+            move(900);
+            expect(scroller.scrollTop).toBeCloseTo(50);
+            move(960); // finger down again -> most of the way back
+            expect(scroller.scrollTop).toBeCloseTo(20);
+            // Leaving the guide unregisters and turns the stream back off.
+            clickButton(/^Back$/);
+            await screen.findByText('Guides');
+            expect(steam.controllerCb).toBeUndefined();
+            expect(steam.analogEnabled).toBe(false);
         } finally {
             undoLayout();
         }

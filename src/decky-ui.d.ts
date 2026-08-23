@@ -4,6 +4,7 @@
 // would not merge). Add here instead of sprinkling @ts-expect-error.
 import type { Ref } from 'react';
 import type { BrowserViewPopup } from '@decky/ui/dist/globals/steam-client/browser-view/BrowserViewPopup';
+import type { Unregisterable } from '@decky/ui/dist/globals/steam-client/shared';
 
 declare module '@decky/ui/dist/components/Dialog' {
     interface DialogButtonProps {
@@ -36,6 +37,29 @@ declare module '@decky/ui/dist/components/TextField' {
         placeholder?: string;
         /** The underlying Steam class component; `.element` is the DOM node. */
         ref?: Ref<{ element?: HTMLElement }>;
+    }
+}
+
+declare module '@decky/ui/dist/globals/steam-client/Input' {
+    interface Input {
+        /** Gates the analog input message stream; off by default. */
+        EnableControllerAnalogInputMessages(enable: boolean): void;
+        /**
+         * Runtime signature overload (the declared array-callback form never
+         * fires): x/y are Steam's accumulated virtual-mouse position, fed by
+         * the right trackpad and right stick, y growing downward. Messages
+         * arrive only while there is input and require
+         * EnableControllerAnalogInputMessages(true).
+         */
+        RegisterForControllerAnalogInputMessages(
+            callback: (
+                a: number,
+                b: number,
+                c: boolean,
+                x: number,
+                y: number
+            ) => void
+        ): Unregisterable;
     }
 }
 
