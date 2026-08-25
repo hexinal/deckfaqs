@@ -30,7 +30,7 @@ The version on the Decky store (1.8.x) is the old upstream release and no longer
 
 - `pnpm install`, then `pnpm build` (or `task build`) bundles `src/index.tsx` into `dist/index.js`.
 - `pnpm package` / `task package` builds and zips the plugin into `deckfaqs.zip`, ready to install as above.
-- Releases are cut automatically from [Conventional Commits](https://www.conventionalcommits.org) on `main` — see [CONTRIBUTING.md](CONTRIBUTING.md).
+- Releases are cut on demand (manual workflow run); the version comes from the [Conventional Commits](https://www.conventionalcommits.org) merged since the last one — see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Features
 
