@@ -4,6 +4,7 @@ import { FaSearch } from 'react-icons/fa';
 import { App } from './components/App/App';
 import { BLANK_PAGE } from './constants';
 import { AppContextProvider } from './context/AppContext';
+import { flushPositions } from './positions';
 
 export default definePlugin(() => {
     const windowRouter = Router.WindowStore?.GamepadUIMainWindowInstance;
@@ -25,6 +26,8 @@ export default definePlugin(() => {
         ),
         icon: <FaSearch />,
         onDismount() {
+            // Land a pending reading-position save before the backend goes away.
+            void flushPositions();
             if (browserView) SteamClient.BrowserView.Destroy(browserView);
             routerHook.removeRoute('/deckfaqs-fullscreen');
         },

@@ -18,7 +18,16 @@ import {
 } from '@testing-library/react';
 import * as React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { Navigation, cef, deckyApi, loadPlugin, routes, steam } from './env';
+import {
+    Navigation,
+    backend,
+    cef,
+    deckyApi,
+    loadPlugin,
+    qam,
+    routes,
+    steam,
+} from './env';
 
 type Plugin = Awaited<ReturnType<typeof loadPlugin>>;
 let plugin: Plugin;
@@ -34,9 +43,10 @@ afterEach(() => {
     document.querySelectorAll('[data-modal]').forEach((el) => el.remove());
     cef.reset();
     // Settings are read on every panel mount: reseed so one test's toggles
-    // cannot leak into the next; reading positions likewise.
+    // cannot leak into the next; the backend's positions file likewise.
     steam.storage.set('deckfaqs_settings', { darkMode: true });
-    steam.storage.delete('deckfaqs_positions');
+    backend.clear();
+    qam.set(true);
 });
 
 const openPanel = () => render(plugin.content);
@@ -375,7 +385,7 @@ describe('DeckFAQs bundle', () => {
             fireEvent.scroll(scroller());
             clickButton(/^Back$/);
             await screen.findByText('Guides');
-            expect(steam.storage.get('deckfaqs_positions')).toMatchObject({
+            expect(backend.get('positions')).toMatchObject({
                 [guideUrl]: { page: subPage, ratio: 0.5 },
             });
             // Reopening lands on the remembered sub-page — from the page cache,
@@ -855,12 +865,12 @@ describe('DeckFAQs bundle', () => {
             await openGuide();
             // Fresh guide (no saved position): stays at the top.
             expect(scroller().scrollTop).toBe(0);
-            // Scroll halfway; Back flushes the position to storage.
+            // Scroll halfway; Back flushes the position to the backend.
             scroller().scrollTop = 400;
             fireEvent.scroll(scroller());
             clickButton(/^Back$/);
             await screen.findByText('Guides');
-            expect(steam.storage.get('deckfaqs_positions')).toMatchObject({
+            expect(backend.get('positions')).toMatchObject({
                 [guideUrl]: {
                     page: '',
                     ratio: 0.5,
@@ -902,7 +912,7 @@ describe('DeckFAQs bundle', () => {
             fireEvent.scroll(scroller());
             clickButton(/^Back$/);
             await screen.findByText('Guides');
-            expect(steam.storage.get('deckfaqs_positions')).toMatchObject({
+            expect(backend.get('positions')).toMatchObject({
                 [guideUrl]: { page: '?page=1', ratio: 0.25 },
             });
             // The remembered page was loaded as `?page=1#section48` and comes
@@ -931,7 +941,7 @@ describe('DeckFAQs bundle', () => {
             fireEvent.scroll(scroller());
             clickButton(/^Back$/);
             await screen.findByText('Guides');
-            expect(steam.storage.get('deckfaqs_positions')).toMatchObject({
+            expect(backend.get('positions')).toMatchObject({
                 [guideUrl]: { page: '', ratio: 0 },
             });
         } finally {
@@ -942,6 +952,73 @@ describe('DeckFAQs bundle', () => {
                 .clientHeight;
         }
     });
+
+    it('carries positions over from SteamClient.Storage the first time there is no file', async () => {
+        const undoLayout = fakeLayout();
+        const guideUrl =
+            'https://gamefaqs.gamespot.com/ps2/197344-final-fantasy-x/faqs/69037';
+        steam.storage.set('deckfaqs_positions', {
+            [guideUrl]: { page: '', ratio: 0.5, ts: 1 },
+        });
+        try {
+            openPanel();
+            await openGuide();
+            const scroller =
+                document.querySelector('.deckfaqs_guide')!.parentElement!;
+            await waitFor(() => expect(scroller.scrollTop).toBe(400));
+            await waitFor(() =>
+                expect(backend.get('positions')).toMatchObject({
+                    [guideUrl]: { page: '', ratio: 0.5 },
+                })
+            );
+        } finally {
+            undoLayout();
+            steam.storage.delete('deckfaqs_positions');
+        }
+    });
+
+    it('ignores scrolls while the Quick Access Menu is closed and puts the position back when it reopens', async () => {
+        const undoLayout = fakeLayout();
+        const guideUrl =
+            'https://gamefaqs.gamespot.com/ps2/197344-final-fantasy-x/faqs/69037';
+        const scroller = () =>
+            document.querySelector('.deckfaqs_guide')!.parentElement!;
+        try {
+            openPanel();
+            await openGuide();
+            scroller().scrollTop = 400;
+            fireEvent.scroll(scroller());
+            await waitFor(
+                () =>
+                    expect(backend.get('positions')).toMatchObject({
+                        [guideUrl]: { page: '', ratio: 0.5 },
+                    }),
+                { timeout: 3000 }
+            );
+            // Menu closed: the panel stays mounted and Steam may snap the
+            // hidden scroller back to the top — that is not the user's doing.
+            act(() => qam.set(false));
+            scroller().scrollTop = 0;
+            fireEvent.scroll(scroller());
+            await new Promise((r) => setTimeout(r, 1500));
+            expect(backend.get('positions')).toMatchObject({
+                [guideUrl]: { page: '', ratio: 0.5 },
+            });
+            // Reopened: the saved position is restored...
+            act(() => qam.set(true));
+            await waitFor(() => expect(scroller().scrollTop).toBe(400));
+            // ...and scrolling is recorded again.
+            scroller().scrollTop = 800;
+            fireEvent.scroll(scroller());
+            clickButton(/^Back$/);
+            await screen.findByText('Guides');
+            expect(backend.get('positions')).toMatchObject({
+                [guideUrl]: { page: '', ratio: 1 },
+            });
+        } finally {
+            undoLayout();
+        }
+    }, 15_000);
 
     it('Back walks guide -> guides -> results -> games and Home jumps to games', async () => {
         openPanel();

@@ -12,6 +12,10 @@
         "test": "vitest run",
         "test:watch": "vitest",
         "test:smoke": "vitest run --config vitest.smoke.config.ts",
+        "lint:py": "uv run --frozen ruff check . && uv run --frozen ruff format --check .",
+        "format:py": "uv run --frozen ruff check --fix . && uv run --frozen ruff format .",
+        "typecheck:py": "uv run --frozen ty check",
+        "test:py": "uv run --frozen pytest",
         "knip": "knip",
         "format": "prettier --write .",
         "format:check": "prettier --check .",
@@ -76,7 +80,11 @@
             "eslint --fix",
             "prettier --write"
         ],
-        "!(*.{ts,tsx,js,mjs,cjs})": "prettier --write --ignore-unknown"
+        "*.py": [
+            "uv run --frozen ruff check --fix",
+            "uv run --frozen ruff format"
+        ],
+        "!(*.{ts,tsx,js,mjs,cjs,py})": "prettier --write --ignore-unknown"
     },
     "engines": {
         "node": ">=22.13"

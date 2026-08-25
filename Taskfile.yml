@@ -39,6 +39,21 @@ tasks:
         cmds:
             - pnpm run test
 
+    lint-py:
+        desc: Lint + format-check main.py with ruff (needs uv)
+        cmds:
+            - pnpm run lint:py
+
+    typecheck-py:
+        desc: Type-check main.py with ty (needs uv)
+        cmds:
+            - pnpm run typecheck:py
+
+    test-py:
+        desc: Run the backend tests (pytest, needs uv)
+        cmds:
+            - pnpm run test:py
+
     test-smoke:
         desc: Run the built bundle end-to-end in jsdom (needs a build)
         deps: [build]

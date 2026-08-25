@@ -112,3 +112,11 @@ dist
 /deckfaqs.tar.gz
 /SHA256SUMS
 /deckfaqs/
+
+# Python backend (main.py) bytecode
+__pycache__/
+
+# Python tooling (uv / ruff / ty / pytest)
+.venv/
+.ruff_cache/
+.pytest_cache/

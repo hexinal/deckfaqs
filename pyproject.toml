@@ -1,0 +1,69 @@
+# Python side of the plugin: main.py (the Decky backend) and its tests.
+# Not a distributable package — this file only pins the dev tools (uv.lock)
+# and configures ruff / ty / pytest. Run them through the pnpm scripts
+# (`pnpm lint:py`, `pnpm typecheck:py`, `pnpm test:py`) or `uv run <tool>`.
+[project]
+name = "deckfaqs"
+version = "0"
+description = "Decky Loader plugin backend (see package.json for the real version)"
+# Decky Loader ships its own Python; keep syntax/stdlib usage within 3.11.
+requires-python = ">=3.11"
+
+[dependency-groups]
+dev = ["pytest>=8", "ruff>=0.14", "ty"]
+
+[tool.uv]
+package = false
+
+# Public PyPI, explicitly: keeps uv.lock free of any private index a
+# contributor may have configured user-wide.
+[[tool.uv.index]]
+name = "pypi"
+url = "https://pypi.org/simple"
+default = true
+
+[tool.ruff]
+target-version = "py311"
+line-length = 88
+extend-exclude = ["node_modules", "dist"]
+
+[tool.ruff.lint]
+select = [
+    "E",     # pycodestyle
+    "W",
+    "F",     # pyflakes
+    "I",     # isort
+    "B",     # bugbear
+    "UP",    # pyupgrade
+    "SIM",   # simplify
+    "RUF",   # ruff-specific
+    "PTH",   # prefer pathlib
+    "ASYNC", # async pitfalls (blocking calls in coroutines)
+    "PL",    # pylint
+    "ANN",   # type annotations
+    "D",     # docstrings
+]
+ignore = [
+    "D203", # one-blank-line-before-class (conflicts with D211)
+    "D213", # multi-line-summary-second-line (conflicts with D212)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"test/backend/*" = ["D", "PLR2004", "ANN"]
+
+[tool.ruff.format]
+docstring-code-format = true
+
+[tool.ty.environment]
+python-version = "3.11"
+root = ["."]
+# `decky` is injected by Decky Loader at runtime; stubs/decky.pyi declares
+# the part of it main.py uses.
+extra-paths = ["stubs"]
+
+[tool.ty.src]
+include = ["main.py", "stubs", "test/backend"]
+
+[tool.pytest.ini_options]
+testpaths = ["test/backend"]
+pythonpath = ["."]

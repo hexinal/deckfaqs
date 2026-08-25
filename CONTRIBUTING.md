@@ -16,16 +16,19 @@ pnpm typecheck        # tsc --noEmit
 pnpm lint             # eslint .            (lint:fix to auto-fix)
 pnpm test             # vitest run           (test:watch for watch mode)
 pnpm test:smoke       # end-to-end run of the built dist/index.js in jsdom (after pnpm build)
+pnpm lint:py          # ruff check + format check for main.py (needs uv, see below)
+pnpm typecheck:py     # ty (type-check main.py against stubs/decky.pyi)
+pnpm test:py          # pytest for main.py (test/backend/)
 pnpm knip             # unused files/exports/dependencies (knip.json)
 pnpm format           # prettier --write .   (format:check in CI)
 pnpm package          # build output -> deckfaqs.zip / deckfaqs.tar.gz (or: task package)
 ```
 
-There is no Python backend. Unit tests (vitest + jsdom, `test/*.test.ts`) cover the reducer, URL/payload helpers, the request queue and the in-tab extraction scripts against saved GameFAQs and Neoseeker pages in `test/fixtures/` (Neoseeker pages must be saved from a real browser — the site blocks curl). `pnpm test:smoke` (`test/smoke/`) goes further: it loads the **built** `dist/index.js` in jsdom with fake `SP_REACT`/`DFL`/`SteamClient`/Decky-loader globals (`test/smoke/env.ts`) and drives the real UI through games → search → guide list → guide (incl. TOC, fullscreen search, error/retry), with the plugin's own extraction scripts running against the saved pages. CI runs both, so a dependency bump that breaks the plugin at runtime fails CI; only Steam-specific look & feel still needs a check on the Deck.
+The only backend code is `main.py`, a minimal Decky Python plugin that keeps the last reading positions in `~/homebrew/settings/deckfaqs/positions.json` (`load_positions`/`save_positions`, called from `src/positions.ts` through `callable` from `@decky/api`); everything else is frontend. Its tooling is the [uv](https://docs.astral.sh/uv/) stack: `uv sync` installs the pinned [ruff](https://docs.astral.sh/ruff/), [ty](https://docs.astral.sh/ty/) and pytest from `uv.lock` (and Python 3.11 from `.python-version` — the syntax floor for Decky's bundled interpreter) into `.venv`; `pnpm lint:py` / `pnpm format:py` / `pnpm typecheck:py` / `pnpm test:py` wrap them, lint-staged runs ruff on staged `.py` files, and CI runs all three. `decky` only exists inside Decky Loader, so `stubs/decky.pyi` declares the bit `main.py` uses and `test/backend/conftest.py` fakes it. Unit tests (vitest + jsdom, `test/*.test.ts`) cover the reducer, URL/payload helpers, the request queue and the in-tab extraction scripts against saved GameFAQs and Neoseeker pages in `test/fixtures/` (Neoseeker pages must be saved from a real browser — the site blocks curl). `pnpm test:smoke` (`test/smoke/`) goes further: it loads the **built** `dist/index.js` in jsdom with fake `SP_REACT`/`DFL`/`SteamClient`/Decky-loader globals (`test/smoke/env.ts`) and drives the real UI through games → search → guide list → guide (incl. TOC, fullscreen search, error/retry), with the plugin's own extraction scripts running against the saved pages. CI runs both, so a dependency bump that breaks the plugin at runtime fails CI; only Steam-specific look & feel still needs a check on the Deck.
 
 ## Testing on a Steam Deck
 
-Either unzip `deckfaqs.zip` into `/home/deck/homebrew/plugins/` (or use Decky → Developer → _Install Plugin from ZIP_), or copy `plugin.json`, `package.json` and `dist/index.js` into `/home/deck/homebrew/plugins/deckfaqs/` (bundle at `dist/index.js`) and run `sudo systemctl restart plugin_loader`. `scripts/uninstall.sh` removes the plugin again.
+Either unzip `deckfaqs.zip` into `/home/deck/homebrew/plugins/` (or use Decky → Developer → _Install Plugin from ZIP_), or copy `plugin.json`, `package.json`, `main.py` and `dist/index.js` into `/home/deck/homebrew/plugins/deckfaqs/` (bundle at `dist/index.js`) and run `sudo systemctl restart plugin_loader`. `scripts/uninstall.sh` removes the plugin again.
 
 ## Commit messages (this is what cuts releases)
 

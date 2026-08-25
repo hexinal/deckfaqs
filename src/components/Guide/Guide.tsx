@@ -38,6 +38,8 @@ import {
 } from '../../sources/source';
 import {
     type AnchorTop,
+    type GuidePosition,
+    flushPositions,
     getPosition,
     pickAnchor,
     restoreTarget,
@@ -402,7 +404,15 @@ export const Guide = ({ fullscreen }: GuideProps) => {
     // and flush the last known one when this view goes away (Back, fullscreen
     // dismiss, plugin unload). Layout effect: its cleanup runs while the
     // element is still in the document, so the final measurement is real.
+    // Only while the panel is on screen: the QAM is alwaysRender, and a scroll
+    // container that Steam hides or re-lays out can snap to 0 (and fire
+    // `scroll`) without the user doing anything — that must not be recorded.
     const page = currentGuide?.page ?? '';
+    const qamVisible = useQuickAccessVisible();
+    const visibleRef = useRef(fullscreen || qamVisible);
+    useLayoutEffect(() => {
+        visibleRef.current = fullscreen || qamVisible;
+    }, [fullscreen, qamVisible]);
     useLayoutEffect(() => {
         const el = getScrollElement();
         if (!el || !guideUrl || isLoading || error) return;
@@ -411,6 +421,7 @@ export const Guide = ({ fullscreen }: GuideProps) => {
         // Anchor lookup walks the whole guide, so do it at most every 250ms.
         const record = (immediate: boolean) => {
             timer = undefined;
+            if (!visibleRef.current) return;
             const range = el.scrollHeight - el.clientHeight;
             if (range <= 0) return;
             last = Math.min(1, Math.max(0, el.scrollTop / range));
@@ -447,7 +458,6 @@ export const Guide = ({ fullscreen }: GuideProps) => {
     // Prefetch the next page of a multi-page guide once this one has been on
     // screen for a moment (Neoseeker's prev/next links; GameFAQs' ?page=N+1
     // when the TOC references it), so a Next click is instant.
-    const qamVisible = useQuickAccessVisible();
     useEffect(() => {
         if (!guideHtml || isLoading || error || !(fullscreen || qamVisible))
             return;
@@ -473,6 +483,20 @@ export const Guide = ({ fullscreen }: GuideProps) => {
     // from the list (or handed back from fullscreen); on first mount fall back
     // to the in-memory cache so fullscreen starts where the panel was. Anchors
     // win — they mean the user asked for a specific section.
+    const applyPosition = useCallback(
+        (
+            el: HTMLElement,
+            position: Pick<GuidePosition, 'ratio' | 'anchor' | 'offset'>
+        ) => {
+            el.scrollTop = restoreTarget(
+                position,
+                getAnchorTops(el),
+                el.scrollHeight,
+                el.clientHeight
+            );
+        },
+        [getAnchorTops]
+    );
     const restoredFor = useRef<GuideContents | undefined>(undefined);
     useEffect(() => {
         if (!currentGuide || currentGuide === restoredFor.current) return;
@@ -487,19 +511,43 @@ export const Guide = ({ fullscreen }: GuideProps) => {
         const el = getScrollElement();
         if (!el) return;
         const target = position;
-        const apply = () => {
-            el.scrollTop = restoreTarget(
-                target,
-                getAnchorTops(el),
-                el.scrollHeight,
-                el.clientHeight
-            );
-        };
+        const apply = () => applyPosition(el, target);
         apply();
         // Once more after layout settles (fonts/images can change the height).
         const raf = requestAnimationFrame(apply);
         return () => cancelAnimationFrame(raf);
-    }, [currentGuide, getScrollElement, getAnchorTops]);
+    }, [currentGuide, applyPosition, getScrollElement]);
+
+    // The panel stays mounted while the QAM is closed. On close, land the
+    // pending save now (a game launch or sleep may follow); on reopen, if the
+    // scroll container came back at the top although the user wasn't there,
+    // put the saved position back instead of letting it be recorded as 0.
+    // Only on the open/close transition itself: a page change while the menu
+    // is open must land where the link pointed, not at an older position.
+    const wasVisibleRef = useRef(qamVisible);
+    useEffect(() => {
+        const was = wasVisibleRef.current;
+        wasVisibleRef.current = qamVisible;
+        if (fullscreen || was === qamVisible || !guideUrl || isLoading || error)
+            return;
+        if (!qamVisible) {
+            void flushPositions();
+            return;
+        }
+        const el = getScrollElement();
+        const pos = getPosition(guideUrl);
+        if (!el || !pos || pos.page !== page || el.scrollTop >= 1) return;
+        applyPosition(el, pos);
+    }, [
+        qamVisible,
+        fullscreen,
+        guideUrl,
+        page,
+        isLoading,
+        error,
+        applyPosition,
+        getScrollElement,
+    ]);
     return useMemo(
         () =>
             error ? (
