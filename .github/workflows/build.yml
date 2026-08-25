@@ -7,8 +7,15 @@ on:
     # is gated on main below.
     pull_request:
 
-    # Allows you to run this workflow manually from the Actions tab
+    # Releases are cut on demand: Actions -> "Build and Release DeckFAQs" ->
+    # Run workflow (on main), or `gh workflow run build.yml --ref main
+    # [-f dry_run=true]`. Pushes and PRs only run the checks/build below.
     workflow_dispatch:
+        inputs:
+            dry_run:
+                description: Preview only — print the next version and notes, create nothing
+                type: boolean
+                default: false
 
 # Least privilege by default; the release job widens this.
 permissions:
@@ -129,10 +136,14 @@ jobs:
                       deckfaqs.zip
                       deckfaqs.tar.gz
 
+    # Only when triggered by hand (workflow_dispatch on main) and only after the
+    # full pipeline above passed in this run. The version still comes from the
+    # conventional commits merged since the last tag; a run with nothing
+    # releasable just says so.
     release:
         name: Release
         needs: [build, commitlint]
-        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
         runs-on: ubuntu-latest
         timeout-minutes: 15
         concurrency: release
@@ -163,9 +174,11 @@ jobs:
             # semantic-release: analyses conventional commits since the last tag,
             # bumps package.json, writes CHANGELOG.md, rebuilds + packages with the
             # new version (see .releaserc.json), commits back, tags and publishes
-            # a GitHub release with the zip/tarball attached.
+            # a GitHub release with the zip/tarball attached. With dry_run it only
+            # logs the next version and notes (the attestation step below is then
+            # skipped too, as no archive exists).
             - name: Release
-              run: pnpm exec semantic-release
+              run: pnpm exec semantic-release ${{ inputs.dry_run && '--dry-run' || '' }}
               env:
                   GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
 

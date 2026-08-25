@@ -32,7 +32,7 @@ Either unzip `deckfaqs.zip` into `/home/deck/homebrew/plugins/` (or use Decky �
 
 ## Commit messages (this is what cuts releases)
 
-Releases are fully automated with [semantic-release](https://semantic-release.gitbook.io) on every push to `main`. It reads [Conventional Commits](https://www.conventionalcommits.org) since the last tag and decides the version:
+Releases are cut **on demand** with [semantic-release](https://semantic-release.gitbook.io): Actions → _Build and Release DeckFAQs_ → _Run workflow_ on `main` (tick _dry run_ to only preview the next version and notes), or `gh workflow run build.yml --ref main [-f dry_run=true]`. Merging to `main` runs the checks but never releases, so several PRs can land between releases. When run, it reads [Conventional Commits](https://www.conventionalcommits.org) since the last tag and decides the version:
 
 | Commit                                                | Release       |
 | ----------------------------------------------------- | ------------- |
