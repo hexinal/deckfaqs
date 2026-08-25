@@ -112,3 +112,6 @@ dist
 /deckfaqs.tar.gz
 /SHA256SUMS
 /deckfaqs/
+
+# Python backend (main.py) bytecode
+__pycache__/

@@ -15,8 +15,9 @@ export SOURCE_DATE_EPOCH
 STAGE=deckfaqs
 rm -rf "$STAGE" deckfaqs.zip deckfaqs.tar.gz SHA256SUMS
 mkdir -p "$STAGE/dist"
-# Decky needs package.json ("type": "module") next to plugin.json to load the ESM bundle.
-cp plugin.json package.json LICENSE "$STAGE/"
+# Decky needs package.json ("type": "module") next to plugin.json to load the ESM
+# bundle; main.py is the backend that keeps the reading-positions file.
+cp plugin.json package.json LICENSE main.py "$STAGE/"
 cp dist/index.js dist/index.js.map "$STAGE/dist/"
 find "$STAGE" -exec touch -h -d "@$SOURCE_DATE_EPOCH" {} +
 

@@ -1,3 +1,4 @@
+import { callable } from '@decky/api';
 import { MAX_POSITIONS, POSITIONS } from './constants';
 
 /** Last reading position of a guide, keyed by its base guideUrl. */
@@ -16,11 +17,19 @@ export type GuidePosition = {
 
 type Positions = Record<string, GuidePosition>;
 
+// The positions live in a file the backend (main.py) owns under Decky's
+// settings dir: SteamClient.Storage (Steam's localconfig.vdf) is only flushed
+// now and then, so a hard power-off or a reinstall lost them. `null` = no file.
+const loadStore = callable<[], unknown>('load_positions');
+const saveStore = callable<[Positions], void>('save_positions');
+
 // In-memory copy so the QAM and fullscreen Guide instances share one view and
 // reads don't race the (async) storage.
 let cache: Positions | undefined;
 let loading: Promise<Positions> | undefined;
 let writeTimer: ReturnType<typeof setTimeout> | undefined;
+// Writes are chained so two coalesced saves can never land out of order.
+let writing: Promise<void> = Promise.resolve();
 
 const isPosition = (v: unknown): v is GuidePosition => {
     if (typeof v !== 'object' || v === null) return false;
@@ -32,6 +41,17 @@ const isPosition = (v: unknown): v is GuidePosition => {
         (p.anchor === undefined || typeof p.anchor === 'string') &&
         (p.offset === undefined || typeof p.offset === 'number')
     );
+};
+
+/** Keep only well-formed entries of a stored map. */
+const parsePositions = (parsed: unknown): Positions => {
+    const out: Positions = {};
+    if (typeof parsed === 'object' && parsed !== null) {
+        for (const [k, v] of Object.entries(parsed)) {
+            if (isPosition(v)) out[k] = v;
+        }
+    }
+    return out;
 };
 
 /** An anchorable element's name and its top, in scroll-container coordinates. */
@@ -84,40 +104,72 @@ export const restoreTarget = (
     return Math.min(max, Math.max(0, position.ratio * max));
 };
 
-/** Load (once) the saved positions from SteamClient.Storage; {} on any error. */
+/** What versions before the backend file kept in SteamClient.Storage; {} if none. */
+const loadLegacy = (): Promise<Positions> =>
+    SteamClient.Storage.GetJSON(POSITIONS)
+        .then((raw) => parsePositions(JSON.parse(raw as string)))
+        .catch((): Positions => ({}));
+
+/**
+ * Load (once) the saved positions from the backend; {} on any error. Keyed on
+ * the load itself, not on `cache`: a save made before the file is read
+ * already fills `cache`, and a write must still wait for the load.
+ */
 export const loadPositions = (): Promise<Positions> => {
-    if (cache) return Promise.resolve(cache);
     if (!loading) {
-        loading = SteamClient.Storage.GetJSON(POSITIONS)
-            .then((raw) => {
-                const parsed = JSON.parse(raw as string) as unknown;
-                const out: Positions = {};
-                if (typeof parsed === 'object' && parsed !== null) {
-                    for (const [k, v] of Object.entries(parsed)) {
-                        if (isPosition(v)) out[k] = v;
-                    }
+        let migrate = false;
+        loading = loadStore()
+            .then(async (stored) => {
+                if (stored !== null && stored !== undefined) {
+                    return parsePositions(stored);
                 }
-                return out;
+                // No file yet: carry over what an older version saved in Steam's storage.
+                const legacy = await loadLegacy();
+                migrate = Object.keys(legacy).length > 0;
+                return legacy;
             })
-            .catch((): Positions => ({}))
-            // A save may have happened while loading; it wins over storage.
-            .then((p) => (cache = { ...p, ...(cache ?? {}) }));
+            .catch((e: unknown): Positions => {
+                console.warn('[DeckFAQs] could not load reading positions', e);
+                return {};
+            })
+            .then((p) => {
+                // A save may have happened while loading; it wins over storage.
+                cache = { ...p, ...(cache ?? {}) };
+                if (migrate) void write();
+                return cache;
+            });
     }
-    return loading;
+    // The live map, not the one the load resolved with: saves replace `cache`.
+    return loading.then(() => cache ?? {});
 };
 
 /** Saved position for a guide, if any (undefined until loadPositions resolved). */
 export const getPosition = (guideUrl: string): GuidePosition | undefined =>
     cache?.[guideUrl];
 
-const flush = () => {
+const write = (): Promise<void> => {
+    writing = writing
+        // Never write a partial map over a full one: wait for the load first.
+        .then(() => loadPositions())
+        .then(() => {
+            if (!cache) return;
+            const entries = Object.entries(cache).sort(
+                (a, b) => b[1].ts - a[1].ts
+            );
+            if (entries.length > MAX_POSITIONS) {
+                cache = Object.fromEntries(entries.slice(0, MAX_POSITIONS));
+            }
+            return saveStore(cache);
+        })
+        .catch((e: unknown) => {
+            console.warn('[DeckFAQs] could not save reading positions', e);
+        });
+    return writing;
+};
+
+const flush = (): Promise<void> => {
     writeTimer = undefined;
-    if (!cache) return;
-    const entries = Object.entries(cache).sort((a, b) => b[1].ts - a[1].ts);
-    if (entries.length > MAX_POSITIONS) {
-        cache = Object.fromEntries(entries.slice(0, MAX_POSITIONS));
-    }
-    void SteamClient.Storage.SetObject(POSITIONS, cache);
+    return write();
 };
 
 /**
@@ -131,14 +183,27 @@ export const savePosition = (
 ) => {
     cache = { ...(cache ?? {}), [guideUrl]: { ...position, ts: Date.now() } };
     if (writeTimer) clearTimeout(writeTimer);
-    if (immediate) flush();
-    else writeTimer = setTimeout(flush, 1000);
+    if (immediate) void flush();
+    else writeTimer = setTimeout(() => void flush(), 1000);
+};
+
+/**
+ * Write a pending (coalesced) save now — before the plugin unloads or the
+ * panel is hidden. Resolves once every write so far has landed.
+ */
+export const flushPositions = (): Promise<void> => {
+    if (writeTimer) {
+        clearTimeout(writeTimer);
+        return flush();
+    }
+    return writing;
 };
 
 /** Test-only: forget the in-memory cache and pending write. */
 export const resetPositionsCache = () => {
     cache = undefined;
     loading = undefined;
+    writing = Promise.resolve();
     if (writeTimer) clearTimeout(writeTimer);
     writeTimer = undefined;
 };

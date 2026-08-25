@@ -191,6 +191,19 @@ cef.executeInTab.mockImplementation(
 // Decky loader API (what @decky/api's connect() returns).
 // ---------------------------------------------------------------------------
 export const routes = new Map<string, React.ComponentType>();
+// The plugin backend (main.py): `call(route, ...args)` → Plugin.<route>(*args).
+// Its positions file is this map's 'positions' entry (absent = no file yet).
+export const backend = new Map<string, unknown>();
+// Whether the Quick Access Menu is open (useQuickAccessVisible): the panel is
+// alwaysRender, so tests flip this to simulate closing/reopening the menu.
+const qamListeners = new Set<() => void>();
+export const qam = {
+    visible: true,
+    set(visible: boolean) {
+        qam.visible = visible;
+        qamListeners.forEach((l) => l());
+    },
+};
 export const deckyApi = {
     _version: 2,
     executeInTab: cef.executeInTab,
@@ -203,8 +216,21 @@ export const deckyApi = {
             routes.delete(path);
         }),
     },
-    call: vi.fn(),
-    callable: vi.fn(),
+    call: vi.fn((route: string, ...args: unknown[]): Promise<unknown> => {
+        switch (route) {
+            case 'load_positions':
+                return Promise.resolve(backend.get('positions') ?? null);
+            case 'save_positions':
+                backend.set('positions', args[0]);
+                return Promise.resolve(undefined);
+            default:
+                return Promise.reject(new Error(`unknown route ${route}`));
+        }
+    }),
+    callable:
+        (route: string) =>
+        (...args: unknown[]) =>
+            deckyApi.call(route, ...args),
     addEventListener: vi.fn(),
     removeEventListener: vi.fn(),
     toaster: { toast: vi.fn() },
@@ -212,7 +238,14 @@ export const deckyApi = {
     injectCssIntoTab: vi.fn(),
     removeCssFromTab: vi.fn(),
     getExternalResourceURL: vi.fn(),
-    useQuickAccessVisible: () => true,
+    useQuickAccessVisible: () =>
+        React.useSyncExternalStore(
+            (l) => {
+                qamListeners.add(l);
+                return () => qamListeners.delete(l);
+            },
+            () => qam.visible
+        ),
 };
 
 // ---------------------------------------------------------------------------
