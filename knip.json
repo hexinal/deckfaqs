@@ -5,5 +5,6 @@
     "ignoreDependencies": [
         "@semantic-release/npm",
         "conventional-changelog-conventionalcommits"
-    ]
+    ],
+    "ignoreBinaries": ["uv"]
 }

@@ -9,25 +9,45 @@ DECKY_PLUGIN_SETTINGS_DIR/positions.json, written atomically and fsync'd.
 import asyncio
 import json
 import os
+from collections.abc import Mapping
+from pathlib import Path
 
 import decky
 
 POSITIONS_FILE = "positions.json"
 
+Positions = dict[str, object]
+
+
+def _read(path: Path) -> object:
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _write(path: Path, positions: Mapping[str, object]) -> None:
+    """Write to a temp file, fsync, then rename over the old one."""
+    tmp = path.with_suffix(".json.tmp")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with tmp.open("w", encoding="utf-8") as f:
+        json.dump(positions, f, separators=(",", ":"))
+        f.flush()
+        os.fsync(f.fileno())
+    tmp.replace(path)
+
 
 class Plugin:
+    """Decky entry point: every public coroutine is a `call()` route."""
+
     _lock = asyncio.Lock()
 
     @staticmethod
-    def _path() -> str:
-        return os.path.join(decky.DECKY_PLUGIN_SETTINGS_DIR, POSITIONS_FILE)
+    def _path() -> Path:
+        return Path(decky.DECKY_PLUGIN_SETTINGS_DIR) / POSITIONS_FILE
 
-    async def load_positions(self):
-        """The saved positions, or None when there is no (readable) file yet."""
+    async def load_positions(self) -> Positions | None:
+        """Return the saved positions, or None when there is no (readable) file."""
         path = self._path()
         try:
-            with open(path, encoding="utf-8") as f:
-                data = json.load(f)
+            data = await asyncio.to_thread(_read, path)
         except FileNotFoundError:
             return None
         except (OSError, ValueError) as e:
@@ -38,20 +58,13 @@ class Plugin:
             return None
         return data
 
-    async def save_positions(self, positions: dict) -> None:
-        """Replace the saved positions (write to a temp file, then rename)."""
-        path = self._path()
-        tmp = path + ".tmp"
+    async def save_positions(self, positions: Mapping[str, object]) -> None:
+        """Replace the saved positions."""
         async with self._lock:
-            os.makedirs(os.path.dirname(path), exist_ok=True)
-            with open(tmp, "w", encoding="utf-8") as f:
-                json.dump(positions, f, separators=(",", ":"))
-                f.flush()
-                os.fsync(f.fileno())
-            os.replace(tmp, path)
+            await asyncio.to_thread(_write, self._path(), positions)
 
-    async def _main(self):
-        pass
+    async def _main(self) -> None:
+        """Nothing runs in the background."""
 
-    async def _unload(self):
-        pass
+    async def _unload(self) -> None:
+        """Nothing to stop."""

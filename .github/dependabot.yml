@@ -30,6 +30,22 @@ updates:
           prefix-development: 'chore(deps)'
       labels: [dependencies]
 
+    # uv: the Python dev tools in uv.lock (ruff, ty, pytest) — nothing ships
+    # to the Deck, so plain chores.
+    - package-ecosystem: uv
+      directory: /
+      schedule:
+          interval: monthly
+      open-pull-requests-limit: 2
+      cooldown:
+          default-days: 3
+      groups:
+          python-tools:
+              patterns: ['*']
+      commit-message:
+          prefix: 'chore(deps)'
+      labels: [dependencies]
+
     - package-ecosystem: github-actions
       directory: /
       schedule:

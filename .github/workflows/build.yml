@@ -70,6 +70,16 @@ jobs:
 
             - uses: ./.github/actions/setup
 
+            # Python side (main.py): uv installs the pinned ruff / ty / pytest
+            # from uv.lock and the interpreter from .python-version.
+            - name: Setup uv
+              uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+              with:
+                  enable-cache: true
+
+            - name: Install Python tools
+              run: uv sync --frozen
+
             - name: Audit runtime dependencies
               run: pnpm audit --prod --audit-level=high
 
@@ -79,11 +89,20 @@ jobs:
             - name: Lint
               run: pnpm run lint
 
+            - name: Lint Python (ruff)
+              run: pnpm run lint:py
+
             - name: Type-check
               run: pnpm run typecheck
 
+            - name: Type-check Python (ty)
+              run: pnpm run typecheck:py
+
             - name: Unit tests
               run: pnpm run test
+
+            - name: Backend tests (pytest)
+              run: pnpm run test:py
 
             - name: Unused code / dependencies
               run: pnpm run knip
