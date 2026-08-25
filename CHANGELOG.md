@@ -1,3 +1,9 @@
+## [2.3.0](https://github.com/hexinal/deckfaqs/compare/v2.2.2...v2.3.0) (2026-08-25)
+
+### Features
+
+* keep reading positions in a plugin-owned file ([#22](https://github.com/hexinal/deckfaqs/issues/22)) ([ee3c459](https://github.com/hexinal/deckfaqs/commit/ee3c4592a0013fbe2ce04e661b0a2fbdaf8032b6))
+
 ## [2.2.2](https://github.com/hexinal/deckfaqs/compare/v2.2.1...v2.2.2) (2026-08-23)
 
 ### Reverts
